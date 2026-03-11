@@ -1,27 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
-  AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
-  CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, Contact, IdCard, Upload
+  Search, User, UserPlus, UserMinus, Trash2, FileUp, 
+  CheckCircle, MapPin, ChevronDown, Loader2, Ban,
+  GraduationCap, School, Printer, Contact, Upload
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  setDoc,
-  deleteDoc, 
-  query 
-} from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, collection, onSnapshot, addDoc, updateDoc, setDoc, deleteDoc, query } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -41,7 +26,6 @@ const appId = 'wrms-locker-system';
 const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Science Wing"];
 
 // --- UI Components ---
-
 const StatCard = ({ label, value, color }) => (
   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden transition-all hover:shadow-md print:hidden">
     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</div>
@@ -51,14 +35,13 @@ const StatCard = ({ label, value, color }) => (
 );
 
 // --- Main Application ---
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [lockers, setLockers] = useState([]);
   const [students, setStudents] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
-  const [activeSet, setActiveSet] = useState(4); // Default to Set #4
+  const [activeSet, setActiveSet] = useState(4); 
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -109,7 +92,7 @@ export default function App() {
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => notify("Database Connection Issue", "error"));
+    });
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -163,7 +146,6 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
-              // Student format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -200,7 +182,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10 text-center">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
         <h1 className="text-xl font-black text-slate-800 tracking-tighter uppercase">WRMS</h1>
-        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Initializing Database...</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Connecting to database...</p>
       </div>
     );
   }
@@ -208,18 +190,19 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20 print:bg-white print:pb-0">
       
-      {/* Print View Table */}
+      {/* Hidden Layout for Print Reports */}
       <div className="hidden print:block p-10">
         <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10 text-left">
           <div>
             <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900">Assignment Report</h1>
-            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">WRMS • {new Date().toLocaleString()}</p>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">WRMS Middle School • Printed: {new Date().toLocaleString()}</p>
           </div>
           <div className="text-right">
             <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Wing: {locationFilter}</p>
             <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Set: #{activeSet}</p>
           </div>
         </div>
+        
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-slate-100 border-b-2 border-slate-900 text-left text-slate-600">
@@ -231,7 +214,7 @@ export default function App() {
           </thead>
           <tbody>
             {filteredLockers.map(l => (
-              <tr key={l.id} className="border-b border-slate-200">
+              <tr key={l.id} className="border-b border-slate-200 hover:bg-slate-50">
                 <td className="p-4 font-mono font-black text-xl text-slate-900">#{l.lockerNumber}</td>
                 <td className={`p-4 font-bold text-lg ${!l.studentName ? 'text-slate-300 italic' : 'text-slate-800'}`}>
                   {l.studentName || "UNASSIGNED"}
@@ -372,7 +355,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl flex flex-col items-center">
-                   <IdCard className="text-slate-100 mb-4" size={64} />
+                   <Contact className="text-slate-200 mb-4" size={64} />
                    <p className="text-slate-300 font-black uppercase text-[10px] tracking-widest">Pick a student above to see info</p>
                 </div>
               )}
@@ -386,7 +369,7 @@ export default function App() {
                <div key={log.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm">
                   <div className="text-left">
                     <h3 className="font-black text-lg text-slate-900 tracking-tighter uppercase text-rose-600">Locker #{log.lockerNumber}</h3>
-                    <p className="text-slate-500 font-medium italic">"{log.issue}"</p>
+                    <p className="text-slate-500 font-medium italic text-left">"{log.issue}"</p>
                   </div>
                   <button onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', log.id), { status: 'resolved' })} className="bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-emerald-700 transition-all active:scale-95">Mark Fixed</button>
                </div>
