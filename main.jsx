@@ -162,6 +162,7 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
+              // Student format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -198,7 +199,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
         <h1 className="text-xl font-black text-slate-800 tracking-tighter uppercase">WRMS</h1>
-        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Connecting...</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Connecting to school database...</p>
       </div>
     );
   }
@@ -243,10 +244,9 @@ export default function App() {
         </table>
       </div>
 
-      {/* Main App UI */}
       <header className="bg-white border-b sticky top-0 z-40 p-4 flex justify-between items-center shadow-sm print:hidden">
         <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-2 rounded-lg text-white font-black text-xs shadow-md">WRMS</div>
+          <div className="bg-blue-600 p-2 rounded-lg text-white font-black text-xs shadow-md uppercase">WRMS</div>
           <nav className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
             <button onClick={() => setView('inventory')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${view === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Inventory</button>
             <button onClick={() => setView('students')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${view === 'students' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Students</button>
@@ -260,7 +260,7 @@ export default function App() {
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400 hover:bg-slate-300'}`}>{n}</button>
             ))}
           </div>
-          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Import Data"><FileUp size={20}/></button>
+          <button onClick={() => { setImportType('lockers'); setImportModalOpen(true); }} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Import Data"><FileUp size={20}/></button>
           <button onClick={() => window.print()} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Print Report"><Printer size={20}/></button>
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100 active:scale-95 transition-transform hover:bg-blue-700">+ NEW</button>
         </div>
@@ -270,8 +270,8 @@ export default function App() {
         {view === 'inventory' && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-              <StatCard label="Total Lockers" value={lockers.length} color="blue" />
-              <StatCard label="Available" value={lockers.filter(l => !l.studentName).length} color="emerald" />
+              <StatCard label="Total" value={lockers.length} color="blue" />
+              <StatCard label="Empty" value={lockers.filter(l => !l.studentName).length} color="emerald" />
               <StatCard label="Broken" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
               <StatCard label="Active Set" value={`#${activeSet}`} color="blue" />
             </div>
@@ -279,7 +279,7 @@ export default function App() {
             <div className="flex flex-col md:flex-row gap-4 mb-10">
               <div className="relative flex-grow">
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
-                <input type="text" placeholder="Search Locker or Student..." className="w-full pl-14 pr-6 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm text-lg font-medium focus:ring-4 focus:ring-blue-50 transition-all placeholder:text-slate-300" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <input type="text" placeholder="Search Number or Student..." className="w-full pl-14 pr-6 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm text-lg font-medium focus:ring-4 focus:ring-blue-50 transition-all placeholder:text-slate-300" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               <div className="relative min-w-[220px]">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -297,7 +297,7 @@ export default function App() {
                   <div key={l.id} className={`bg-white border rounded-[2rem] p-6 group relative shadow-sm transition-all hover:shadow-md ${isUnusable ? 'border-rose-200 bg-rose-50/20' : l.studentName ? 'border-blue-100 bg-blue-50/10' : 'border-slate-200'}`}>
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 text-left">
                           <span className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</span>
                           {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-sm animate-pulse">Broken</span>}
                         </div>
@@ -334,7 +334,7 @@ export default function App() {
           <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
             <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8 text-center relative overflow-hidden">
               <h2 className="text-3xl font-black mb-1 tracking-tighter text-slate-800 uppercase">Student Directory</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-10">Search student info or update list</p>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-10">Look up student details or update list</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
                 <div className="relative">
@@ -348,16 +348,16 @@ export default function App() {
                 
                 <button 
                   onClick={() => { setImportType('students'); setImportModalOpen(true); }}
-                  className="bg-blue-600 text-white rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 py-5"
+                  className="bg-blue-600 text-white rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 py-5 border-b-4 border-blue-800"
                 >
-                  <Upload size={18} /> Upload Student List
+                  <Upload size={18} /> Upload Student CSV List
                 </button>
               </div>
 
               {currentStudentDetails ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200 text-left">
                   <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 shadow-sm">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2 block">Grade</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2 block">Grade Level</span>
                     <p className="text-2xl font-black text-blue-900">{currentStudentDetails.grade || "N/A"}</p>
                   </div>
                   <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100 shadow-sm">
@@ -372,7 +372,7 @@ export default function App() {
               ) : (
                 <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
                    <IdCard className="mx-auto text-slate-100 mb-4" size={64} />
-                   <p className="text-slate-300 font-black uppercase text-[10px] tracking-widest">Select a student to view school info</p>
+                   <p className="text-slate-300 font-black uppercase text-[10px] tracking-widest">Pick a student above to see info</p>
                 </div>
               )}
             </div>
@@ -398,20 +398,15 @@ export default function App() {
         )}
       </main>
 
-      {/* Bulk Upload Modal */}
+      {/* Modals */}
       {importModalOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
             <div className="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-6 shadow-inner"><Upload size={40}/></div>
-            <h2 className="text-3xl font-black mb-2 tracking-tighter text-slate-800">CSV Importer</h2>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">Select category and pick file</p>
+            <h2 className="text-3xl font-black mb-2 tracking-tighter text-slate-800 uppercase">CSV Import</h2>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">Importing into: {importType}</p>
             
             <div className="space-y-6">
-              <div className="flex gap-2 bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
-                 <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Lockers</button>
-                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
-              </div>
-              
               <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 bg-slate-50/50 relative">
                 <input 
                   type="file" 
@@ -420,11 +415,13 @@ export default function App() {
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                 />
                 {selectedFile ? (
-                  <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest">
-                    <CheckCircle size={18} /> {selectedFile.name}
+                  <div className="flex flex-col items-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest">
+                    <CheckCircle size={24} /> {selectedFile.name}
                   </div>
                 ) : (
-                  <div className="text-slate-400 font-black text-xs uppercase tracking-widest">Pick CSV File</div>
+                  <div className="text-slate-400 font-black text-xs uppercase tracking-widest flex flex-col items-center gap-2">
+                    <Upload size={24}/> Pick CSV File
+                  </div>
                 )}
               </div>
 
@@ -432,17 +429,17 @@ export default function App() {
                 <button 
                   onClick={startCSVImport}
                   disabled={isUploading}
-                  className="w-full bg-emerald-600 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-xs shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-emerald-600 text-white rounded-2xl py-5 font-black uppercase tracking-widest text-xs shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
                 >
                   {isUploading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}
-                  {isUploading ? `Processing ${progress} of ${totalToUpload}` : "Finalize Upload"}
+                  {isUploading ? `Uploading ${progress}/${totalToUpload}` : "Finalize and Save"}
                 </button>
               )}
             </div>
             
             <button 
               onClick={() => { setImportModalOpen(false); setSelectedFile(null); }} 
-              className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors text-center block w-full"
+              className="mt-8 text-slate-300 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-500 transition-colors"
             >
               Cancel
             </button>
@@ -450,7 +447,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Manual Add Modal */}
+      {/* Manual Add Locker Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in zoom-in duration-200">
           <form onSubmit={async (e) => {
@@ -466,7 +463,7 @@ export default function App() {
             setIsModalOpen(false);
             notify("Locker created");
           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100 text-left">
-             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 uppercase">New Entry</h2>
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 uppercase">New Locker</h2>
              <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
@@ -479,7 +476,7 @@ export default function App() {
                    </select>
                 </div>
              </div>
-             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
+             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest text-left">Codes (Sets 1-5)</label>
              <div className="grid grid-cols-5 gap-2 mb-8">
                 {[1,2,3,4,5].map(n => (
                   <div key={n}>
@@ -493,6 +490,47 @@ export default function App() {
                 <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create</button>
              </div>
           </form>
+        </div>
+      )}
+
+      {isAssignModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+           <form onSubmit={async (e) => {
+             e.preventDefault();
+             const name = new FormData(e.target).get('studentName');
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', activeLockerForAssign.id), { studentName: name });
+             setIsAssignModalOpen(false);
+             notify(`Assigned to ${name}`);
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200 border border-slate-100">
+              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 uppercase text-center">Assign #{activeLockerForAssign?.lockerNumber}</h2>
+              <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="Full Student Name" />
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
+              </div>
+           </form>
+        </div>
+      )}
+
+      {isUnusableModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+           <form onSubmit={async (e) => {
+             e.preventDefault();
+             const issue = new FormData(e.target).get('issue');
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'maintenance'), {
+               lockerId: activeLockerForStatus.id, lockerNumber: activeLockerForStatus.lockerNumber, issue, status: 'pending', createdAt: new Date().toISOString()
+             });
+             setIsUnusableModalOpen(false);
+             notify("Report submitted");
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100 text-center">
+              <h2 className="text-3xl font-black mb-4 tracking-tighter text-rose-600 uppercase">Mark Broken</h2>
+              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
+              <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
+              <div className="flex gap-3">
+                 <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform hover:bg-rose-700">Submit</button>
+              </div>
+           </form>
         </div>
       )}
 
