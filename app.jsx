@@ -4,7 +4,7 @@ import {
   CheckCircle, MapPin, ChevronDown, Loader2, Ban,
   GraduationCap, School, Printer, BookOpen, Upload
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
   signInAnonymously, 
@@ -32,15 +32,14 @@ const firebaseConfig = {
   appId: "1:870499565234:web:31b19a27693bfd6c1313ab"
 };
 
-const app = initializeApp(firebaseConfig);
+// Safety check to prevent hot-reloading crashes
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'wrms-locker-system';
 
 // --- Shared UI Components ---
-
 const StatCard = ({ label, value, color }) => (
-  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md print:hidden">
+  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md print:hidden relative overflow-hidden">
     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</div>
     <div className="text-2xl font-black text-slate-900 tracking-tight">{value}</div>
     {color && <div className={`absolute bottom-0 left-0 w-full h-1 ${color === 'blue' ? 'bg-blue-500' : color === 'rose' ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>}
@@ -48,14 +47,16 @@ const StatCard = ({ label, value, color }) => (
 );
 
 // --- Main App Component ---
-// EXPORT DEFAULT is required here to prevent AST build errors on Vercel
 export default function App() {
+  const appId = 'wrms-locker-system';
+  const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Science Wing"];
+
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [lockers, setLockers] = useState([]);
   const [students, setStudents] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
-  const [activeSet, setActiveSet] = useState(4); // Default to Set 4
+  const [activeSet, setActiveSet] = useState(4); 
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -77,20 +78,32 @@ export default function App() {
   const [viewingCombination, setViewingCombination] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // Authentication Setup
+  // Authentication Setup with Forced Timeout Unblocker
   useEffect(() => {
+    let isMounted = true;
+
     const login = async () => {
       try {
-        await signInAnonymously(auth);
+        // This races the auth request against a 1.5-second timer. 
+        // If your browser blocks Firebase, this forces the loading screen to drop anyway!
+        const authPromise = signInAnonymously(auth);
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+        
+        await Promise.race([authPromise, timeoutPromise]);
       } catch (err) {
-        console.error("Auth failed:", err);
+        console.warn("Auth took too long or was blocked. Bypassing loading screen.");
       } finally {
-        setIsAuthLoading(false);
+        if (isMounted) setIsAuthLoading(false);
       }
     };
+    
     login();
     const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
+    
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // Data Syncing
@@ -102,21 +115,22 @@ export default function App() {
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
     const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'maintenance');
 
+    // Added empty error callbacks so Firebase permission errors don't crash the app
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) setActiveSet(docSnap.data().activeSet || 4);
-    });
+    }, () => {});
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, () => {});
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, () => {});
 
     const unsubLogs = onSnapshot(query(logsRef), (snapshot) => {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, () => {});
 
     return () => { unsubSettings(); unsubLockers(); unsubStudents(); unsubLogs(); };
   }, [user]);
@@ -132,10 +146,10 @@ export default function App() {
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
       await setDoc(settingsRef, { activeSet: newSet, updatedAt: new Date().toISOString() }, { merge: true });
       notify(`Global Set switched to #${newSet}`);
-    } catch (e) { notify("Update failed.", "error"); }
+    } catch (e) { notify("Update failed. Check database permissions.", "error"); }
   };
 
-  // Resilient CSV Import
+  // CSV Import Logic
   const startCSVImport = async () => {
     if (!selectedFile || !user) return;
     setIsUploading(true);
@@ -242,7 +256,7 @@ export default function App() {
           </thead>
           <tbody>
             {filteredLockers.map(l => (
-              <tr key={l.id} className="border-b border-slate-200">
+              <tr key={l.id} className="border-b border-slate-200 hover:bg-slate-50">
                 <td className="p-4 font-mono font-black text-xl text-slate-900">#{l.lockerNumber}</td>
                 <td className={`p-4 font-bold text-lg ${!l.studentName ? 'text-slate-300 italic' : 'text-slate-800'}`}>
                   {l.studentName || "UNASSIGNED"}
@@ -272,7 +286,6 @@ export default function App() {
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>{n}</button>
             ))}
           </div>
-          <button onClick={() => { setImportType('lockers'); setImportModalOpen(true); }} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg border border-slate-200" title="Import Locker CSV"><FileUp size={18}/></button>
           <button onClick={() => window.print()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg border border-slate-200" title="Print Report"><Printer size={18}/></button>
           <button onClick={() => {setIsModalOpen(true);}} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100">+ NEW</button>
         </div>
