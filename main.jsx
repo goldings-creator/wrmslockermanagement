@@ -3,7 +3,7 @@ import {
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, Contact, School
+  GraduationCap, Contact, School, Printer
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -44,7 +44,7 @@ const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Sc
 // --- UI Components ---
 
 const StatCard = ({ label, value, color }) => (
-  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
+  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden transition-all hover:shadow-md print:hidden">
     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</div>
     <div className="text-2xl font-black text-slate-900 tracking-tight">{value}</div>
     <div className={`absolute bottom-0 left-0 w-full h-1 ${color === 'blue' ? 'bg-blue-500' : color === 'rose' ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>
@@ -108,7 +108,7 @@ export default function App() {
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => notify("Database Connection Issue", "error"));
+    }, (err) => notify("Database Locked", "error"));
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -128,9 +128,8 @@ export default function App() {
 
   const updateGlobalComboSet = async (newSet) => {
     try {
-      const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-      await setDoc(settingsRef, { activeSet: newSet }, { merge: true });
-      notify(`Set switched to #${newSet}`);
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { activeSet: newSet }, { merge: true });
+      notify(`Global Set switched to #${newSet}`);
     } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
 
@@ -138,16 +137,14 @@ export default function App() {
     const file = e.target.files[0];
     if (!file || !user) return;
     setIsUploading(true);
-    setProgress(0);
-    
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const text = event.target.result;
-        const rows = text.split(/\r?\n/).filter(r => r.trim() !== '').slice(1);
+        const rows = event.target.result.split(/\r?\n/).filter(r => r.trim() !== '').slice(1);
         setTotalToUpload(rows.length);
         let count = 0;
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', importType);
+
         for (const row of rows) {
           const p = row.split(',').map(s => s?.trim());
           if (p[0]) {
@@ -169,7 +166,7 @@ export default function App() {
             setProgress(count);
           }
         }
-        notify(`Imported ${count} items!`);
+        notify(`Imported ${count} ${importType}!`);
         setImportModalOpen(false);
       } catch (err) { notify("Import failed", "error"); }
       setIsUploading(false);
@@ -192,19 +189,56 @@ export default function App() {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-10">
-        <div className="text-center">
-          <Loader2 className="animate-spin text-blue-600 mx-auto mb-4" size={48} />
-          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter uppercase">WRMS Locker System</h1>
-          <p className="text-slate-400 font-medium animate-pulse uppercase text-xs tracking-widest">Connecting to Database...</p>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10">
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+        <h1 className="text-xl font-black text-slate-800 tracking-tighter">WRMS LOCKER SYSTEM</h1>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Connecting to school database...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
-      <header className="bg-white border-b sticky top-0 z-40 p-4 flex justify-between items-center shadow-sm">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20 print:bg-white print:pb-0">
+      {/* Hidden Table for Printing */}
+      <div className="hidden print:block p-8">
+        <div className="flex justify-between items-end border-b-4 border-slate-900 pb-4 mb-8">
+          <div>
+            <h1 className="text-4xl font-black tracking-tighter uppercase">Locker Assignment Report</h1>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-1">WRMS Middle School • {new Date().toLocaleDateString()}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Filter: {locationFilter}</p>
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Combo Set: #{activeSet}</p>
+          </div>
+        </div>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-slate-100 border-b-2 border-slate-900 text-left">
+              <th className="p-3 text-xs font-black uppercase tracking-widest">Locker #</th>
+              <th className="p-3 text-xs font-black uppercase tracking-widest">Student Name</th>
+              <th className="p-3 text-xs font-black uppercase tracking-widest">Location</th>
+              <th className="p-3 text-xs font-black uppercase tracking-widest">Combination</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredLockers.map(l => (
+              <tr key={l.id} className="border-b border-slate-200">
+                <td className="p-3 font-mono font-black text-lg">#{l.lockerNumber}</td>
+                <td className={`p-3 font-bold ${!l.studentName ? 'text-slate-300 italic' : ''}`}>
+                  {l.studentName || "Available"}
+                </td>
+                <td className="p-3 text-sm text-slate-500 font-bold uppercase tracking-wide">{l.location}</td>
+                <td className="p-3 font-mono font-bold">{l[`combination${activeSet}`] || "N/A"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mt-8 text-[10px] text-slate-400 font-bold uppercase text-center border-t pt-4">
+          End of Report • Total Count: {filteredLockers.length} Lockers
+        </div>
+      </div>
+
+      <header className="bg-white border-b sticky top-0 z-40 p-4 flex justify-between items-center shadow-sm print:hidden">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-2 rounded-lg text-white font-black text-xs shadow-md">WRMS</div>
           <nav className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
@@ -220,12 +254,13 @@ export default function App() {
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400'}`}>{n}</button>
             ))}
           </div>
-          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"><FileUp size={20}/></button>
+          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Bulk Upload"><FileUp size={20}/></button>
+          <button onClick={() => window.print()} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Print Report"><Printer size={20}/></button>
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100 active:scale-95 transition-transform hover:bg-blue-700">+ NEW</button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-8">
+      <main className="max-w-7xl mx-auto p-4 md:p-8 print:hidden">
         {view === 'inventory' && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
@@ -291,8 +326,8 @@ export default function App() {
 
         {view === 'students' && (
           <div className="max-w-3xl mx-auto animate-in fade-in duration-300">
-            <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8">
-              <h2 className="text-3xl font-black mb-6 tracking-tighter flex items-center gap-3 text-slate-800">
+            <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8 text-center">
+              <h2 className="text-3xl font-black mb-8 tracking-tighter flex items-center justify-center gap-3 text-slate-800">
                 <GraduationCap className="text-blue-600" size={32} /> Student Lookup
               </h2>
               <div className="relative mb-10">
@@ -304,7 +339,7 @@ export default function App() {
                 <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
               </div>
               {currentStudentDetails ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200 text-left">
                   <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 shadow-sm">
                     <div className="flex items-center gap-2 text-blue-400 mb-2">
                       <GraduationCap size={16} />
@@ -356,7 +391,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Import Modal */}
+      {/* Modals */}
       {importModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
@@ -365,21 +400,62 @@ export default function App() {
             <div className="space-y-4">
               <div className="flex gap-2 mb-4 justify-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
                  <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600 border border-slate-200/30' : 'text-slate-400'}`}>Lockers</button>
-                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
+                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600 border border-slate-200/30' : 'text-slate-400'}`}>Students</button>
               </div>
               <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white cursor-pointer shadow-sm hover:file:bg-blue-700 transition-all" />
               {isUploading && (
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in slide-in-from-bottom-2">
-                  <Loader2 className="animate-spin text-blue-600 mx-auto mb-2" size={24}/>
                   <div className="text-xs font-black uppercase text-slate-400 tracking-widest text-center">Processing {progress} of {totalToUpload}</div>
-                  <div className="w-full h-2 bg-slate-200 rounded-full mt-3 overflow-hidden">
-                    <div className="h-full bg-blue-600 transition-all duration-300 shadow-sm shadow-blue-400" style={{width: `${(progress/totalToUpload)*100}%`}}></div>
-                  </div>
                 </div>
               )}
             </div>
             <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors">Close</button>
           </div>
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in duration-200">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const f = new FormData(e.target);
+            const data = {
+              lockerNumber: f.get('lockerNumber'), studentName: f.get('studentName') || "", location: f.get('location') || "Main Hall",
+              combination1: f.get('combination1') || "0-0-0", combination2: f.get('combination2') || "0-0-0", 
+              combination3: f.get('combination3') || "0-0-0", combination4: f.get('combination4') || "0-0-0", 
+              combination5: f.get('combination5') || "0-0-0", lastModified: new Date().toISOString()
+            };
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lockers'), data);
+            setIsModalOpen(false);
+            notify("Locker created");
+          }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100">
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">New Locker Record</h2>
+             <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
+                   <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="101" />
+                </div>
+                <div>
+                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Wing/Floor</label>
+                   <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all shadow-inner">
+                    {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                   </select>
+                </div>
+             </div>
+             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
+             <div className="grid grid-cols-5 gap-2 mb-8">
+                {[1,2,3,4,5].map(n => (
+                  <div key={n}>
+                    <div className="text-[8px] font-black text-slate-300 text-center mb-1">SET {n}</div>
+                    <input name={`combination${n}`} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px] text-center font-bold outline-none focus:border-blue-200" placeholder="0-0-0" />
+                  </div>
+                ))}
+             </div>
+             <div className="flex gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create</button>
+             </div>
+          </form>
         </div>
       )}
 
@@ -421,51 +497,6 @@ export default function App() {
                  <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
               </div>
            </form>
-        </div>
-      )}
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in duration-200">
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            const f = new FormData(e.target);
-            const data = {
-              lockerNumber: f.get('lockerNumber'), studentName: f.get('studentName') || "", location: f.get('location') || "Main Hall",
-              combination1: f.get('combination1') || "0-0-0", combination2: f.get('combination2') || "0-0-0", 
-              combination3: f.get('combination3') || "0-0-0", combination4: f.get('combination4') || "0-0-0", 
-              combination5: f.get('combination5') || "0-0-0", lastModified: new Date().toISOString()
-            };
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lockers'), data);
-            setIsModalOpen(false);
-            notify("Locker created");
-          }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100">
-             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">New Locker Record</h2>
-             <div className="grid grid-cols-2 gap-6 mb-6">
-                <div>
-                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
-                   <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="101" />
-                </div>
-                <div>
-                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Wing/Floor</label>
-                   <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all shadow-inner">
-                    {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                   </select>
-                </div>
-             </div>
-             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
-             <div className="grid grid-cols-5 gap-2 mb-8">
-                {[1,2,3,4,5].map(n => (
-                  <div key={n}>
-                    <div className="text-[8px] font-black text-slate-300 text-center mb-1">SET {n}</div>
-                    <input name={`combination${n}`} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px] text-center font-bold outline-none focus:border-blue-200" placeholder="0-0-0" />
-                  </div>
-                ))}
-             </div>
-             <div className="flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create</button>
-             </div>
-          </form>
         </div>
       )}
 
