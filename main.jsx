@@ -3,7 +3,7 @@ import {
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, IdCard, Contact
+  GraduationCap, Contact, School, Printer, IdCard
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -20,7 +20,8 @@ import {
   updateDoc, 
   setDoc,
   deleteDoc, 
-  query 
+  query,
+  getDocs
 } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
@@ -96,7 +97,6 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const lockersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lockers');
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -118,12 +118,7 @@ export default function App() {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => {
-      unsubSettings();
-      unsubLockers();
-      unsubStudents();
-      unsubLogs();
-    };
+    return () => { unsubSettings(); unsubLockers(); unsubStudents(); unsubLogs(); };
   }, [user]);
 
   const notify = (message, type = 'success') => {
@@ -143,8 +138,6 @@ export default function App() {
     const file = e.target.files[0];
     if (!file || !user) return;
     setIsUploading(true);
-    setProgress(0);
-    
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -201,7 +194,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
         <h1 className="text-xl font-black text-slate-800 tracking-tighter uppercase">WRMS Locker System</h1>
-        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Connecting to school database...</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Initializing Database...</p>
       </div>
     );
   }
@@ -213,23 +206,21 @@ export default function App() {
       <div className="hidden print:block p-10">
         <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10">
           <div>
-            <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900">Assignment Report</h1>
-            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">WRMS Middle School • Printed: {new Date().toLocaleString()}</p>
+            <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900 text-left">Assignment Report</h1>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">{new Date().toLocaleDateString()}</p>
           </div>
-          <div className="text-right space-y-1">
-            <div className="bg-slate-900 text-white px-3 py-1 rounded text-[10px] font-black uppercase inline-block">Office Copy</div>
+          <div className="text-right">
             <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Wing: {locationFilter}</p>
-            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Active Set: #{activeSet}</p>
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Set: #{activeSet}</p>
           </div>
         </div>
-        
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-slate-100 border-b-2 border-slate-900 text-left">
-              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Locker #</th>
-              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Student Name</th>
-              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Wing / Location</th>
-              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Active Combination</th>
+            <tr className="bg-slate-100 border-b-2 border-slate-900 text-left text-slate-600">
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest">Locker #</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest">Student Name</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest">Location</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-blue-600">Active Code</th>
             </tr>
           </thead>
           <tbody>
@@ -280,8 +271,8 @@ export default function App() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
               <StatCard label="Total Lockers" value={lockers.length} color="blue" />
-              <StatCard label="Available" value={lockers.filter(l => !l.studentName).length} color="emerald" />
-              <StatCard label="Broken" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
+              <StatCard label="Empty" value={lockers.filter(l => !l.studentName).length} color="emerald" />
+              <StatCard label="Issues" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
               <StatCard label="Active Set" value={`#${activeSet}`} color="blue" />
             </div>
 
@@ -306,10 +297,7 @@ export default function App() {
                   <div key={l.id} className={`bg-white border rounded-[2rem] p-6 group relative shadow-sm transition-all hover:shadow-md ${isUnusable ? 'border-rose-200 bg-rose-50/20' : l.studentName ? 'border-blue-100 bg-blue-50/10' : 'border-slate-200'}`}>
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</span>
-                          {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-sm animate-pulse">Broken</span>}
-                        </div>
+                        <div className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mt-1 tracking-widest"><MapPin size={10}/> {l.location || "Hall"}</div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -341,8 +329,8 @@ export default function App() {
 
         {view === 'students' && (
           <div className="max-w-3xl mx-auto animate-in fade-in duration-300">
-            <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8">
-              <h2 className="text-3xl font-black mb-6 tracking-tighter flex items-center gap-3 text-slate-800">
+            <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8 text-center">
+              <h2 className="text-3xl font-black mb-8 tracking-tighter flex items-center justify-center gap-3 text-slate-800">
                 <GraduationCap className="text-blue-600" size={32} /> Student Lookup
               </h2>
               <div className="relative mb-10">
@@ -354,34 +342,25 @@ export default function App() {
                 <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
               </div>
               {currentStudentDetails ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200 text-left">
                   <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 shadow-sm">
-                    <div className="flex items-center gap-2 text-blue-400 mb-2">
-                      <GraduationCap size={16} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Grade</span>
-                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2 block">Grade</span>
                     <p className="text-2xl font-black text-blue-900">{currentStudentDetails.grade || "N/A"}</p>
                   </div>
                   <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100 shadow-sm">
-                    <div className="flex items-center gap-2 text-emerald-400 mb-2">
-                      <School size={16} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Homeroom</span>
-                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2 block">Homeroom</span>
                     <p className="text-2xl font-black text-emerald-900">{currentStudentDetails.homeroom || "N/A"}</p>
                   </div>
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-2 text-slate-400 mb-2">
-                      <IdCard size={16} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">ID Card</span>
-                    </div>
-                    <p className="text-2xl font-black text-slate-900">{currentStudentDetails.studentId || "N/A"}</p>
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm text-slate-400">
+                    <span className="text-[10px] font-black uppercase tracking-widest mb-2 block">Student ID</span>
+                    <p className="text-2xl font-black">{currentStudentDetails.studentId || "N/A"}</p>
                   </div>
                 </div>
-              ) : <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl text-sm uppercase tracking-widest flex items-center justify-center">Select a student above to view details.</div>}
+              ) : <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl uppercase text-[10px] tracking-[0.2em]">Select a student to view details</div>}
             </div>
             <div className="text-center">
-              <button onClick={() => { setImportType('students'); setImportModalOpen(true); }} className="text-blue-600 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline transition-all active:scale-95">
-                <FileUp size={16} /> Upload Student CSV
+              <button onClick={() => { setImportType('students'); setImportModalOpen(true); }} className="text-blue-600 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline transition-all active:scale-95">
+                <FileUp size={16} /> Upload Student List (.csv)
               </button>
             </div>
           </div>
@@ -392,7 +371,7 @@ export default function App() {
              {maintenanceLogs.filter(l => l.status === 'pending').map(log => (
                <div key={log.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm">
                   <div>
-                    <h3 className="font-black text-lg text-slate-900 tracking-tighter uppercase">Locker #{log.lockerNumber}</h3>
+                    <h3 className="font-black text-lg text-slate-900 tracking-tighter uppercase text-rose-600">Locker #{log.lockerNumber}</h3>
                     <p className="text-slate-500 font-medium italic">"{log.issue}"</p>
                   </div>
                   <button onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', log.id), { status: 'resolved' })} className="bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-emerald-700 transition-all active:scale-95">Mark Fixed</button>
@@ -410,21 +389,12 @@ export default function App() {
       {importModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
-            <div className="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-6 shadow-inner"><FileUp size={40}/></div>
-            <h2 className="text-3xl font-black mb-2 tracking-tighter text-slate-800">Bulk Upload</h2>
-            <div className="space-y-4">
-              <div className="flex gap-2 mb-4 justify-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
-                 <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600 border border-slate-200/30' : 'text-slate-400'}`}>Lockers</button>
-                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
-              </div>
-              <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white cursor-pointer shadow-sm hover:file:bg-blue-700 transition-all" />
-              {isUploading && (
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in slide-in-from-bottom-2">
-                  <Loader2 className="animate-spin text-blue-600 mx-auto mb-2" size={24}/>
-                  <div className="text-xs font-black uppercase text-slate-400 tracking-widest text-center">Processing {progress} of {totalToUpload}...</div>
-                </div>
-              )}
+            <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Bulk Upload</h2>
+            <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-xl shadow-inner">
+               <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Lockers</button>
+               <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
             </div>
+            <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white" />
             <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors">Close</button>
           </div>
         </div>
@@ -445,20 +415,20 @@ export default function App() {
             setIsModalOpen(false);
             notify("Locker created");
           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100">
-             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">New Locker Record</h2>
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 text-left">New Locker Record</h2>
              <div className="grid grid-cols-2 gap-6 mb-6">
-                <div>
+                <div className="text-left">
                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
                    <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="101" />
                 </div>
-                <div>
+                <div className="text-left">
                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Wing/Floor</label>
                    <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all shadow-inner">
                     {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
                    </select>
                 </div>
              </div>
-             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
+             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest text-left">Combinations (Sets 1-5)</label>
              <div className="grid grid-cols-5 gap-2 mb-8">
                 {[1,2,3,4,5].map(n => (
                   <div key={n}>
@@ -484,7 +454,7 @@ export default function App() {
              setIsAssignModalOpen(false);
              notify(`Assigned to ${name}`);
            }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200 border border-slate-100">
-              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Assign #{activeLockerForAssign?.lockerNumber}</h2>
+              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 uppercase">Assign #{activeLockerForAssign?.lockerNumber}</h2>
               <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="Enter Full Name" />
               <div className="flex gap-3">
                 <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
@@ -505,12 +475,12 @@ export default function App() {
              setIsUnusableModalOpen(false);
              notify("Report submitted");
            }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100">
-              <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600">Mark Broken</h2>
+              <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600 uppercase">Mark Broken</h2>
               <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
               <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
               <div className="flex gap-3">
                  <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
-                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform">Submit</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform hover:bg-rose-700">Submit</button>
               </div>
            </form>
         </div>
