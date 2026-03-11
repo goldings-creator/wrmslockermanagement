@@ -370,7 +370,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl">
-                  Select a student above to view their school details.
+                  Select a student above to view their details.
                 </div>
               )}
             </div>
