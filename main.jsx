@@ -3,7 +3,7 @@ import {
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, Contact, School, Printer
+  GraduationCap, School, Printer, IdCard
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -80,6 +80,7 @@ export default function App() {
   const [viewingCombination, setViewingCombination] = useState(null);
   const [notification, setNotification] = useState(null);
 
+  // Authentication Setup (Rule 3)
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -95,8 +96,10 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Data Listeners (Rule 1 & 3)
   useEffect(() => {
     if (!user) return;
+    
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const lockersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lockers');
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -104,21 +107,26 @@ export default function App() {
 
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) setActiveSet(docSnap.data().activeSet || 4);
-    });
+    }, (err) => console.error("Settings listener error", err));
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => notify("Database Locked", "error"));
+    }, (err) => notify("Database Connection Issue", "error"));
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => console.error("Students listener error", err));
 
     const unsubLogs = onSnapshot(query(logsRef), (snapshot) => {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => console.error("Maintenance listener error", err));
 
-    return () => { unsubSettings(); unsubLockers(); unsubStudents(); unsubLogs(); };
+    return () => {
+      unsubSettings();
+      unsubLockers();
+      unsubStudents();
+      unsubLogs();
+    };
   }, [user]);
 
   const notify = (message, type = 'success') => {
@@ -128,7 +136,8 @@ export default function App() {
 
   const updateGlobalComboSet = async (newSet) => {
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { activeSet: newSet }, { merge: true });
+      const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+      await setDoc(settingsRef, { activeSet: newSet }, { merge: true });
       notify(`Global Set switched to #${newSet}`);
     } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
@@ -137,18 +146,22 @@ export default function App() {
     const file = e.target.files[0];
     if (!file || !user) return;
     setIsUploading(true);
+    setProgress(0);
+    
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const rows = event.target.result.split(/\r?\n/).filter(r => r.trim() !== '').slice(1);
+        const text = event.target.result;
+        const rows = text.split(/\r?\n/).filter(r => r.trim() !== '').slice(1);
         setTotalToUpload(rows.length);
         let count = 0;
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', importType);
-
+        
         for (const row of rows) {
           const p = row.split(',').map(s => s?.trim());
           if (p[0]) {
             if (importType === 'lockers') {
+              // Locker Format: Number, Name, Set1, Set2, Set3, Set4, Set5, Location
               await addDoc(colRef, {
                 lockerNumber: p[0], studentName: p[1] || "", 
                 combination1: p[2] || "0-0-0", combination2: p[3] || "0-0-0", 
@@ -157,6 +170,7 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
+              // Student Format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -166,7 +180,7 @@ export default function App() {
             setProgress(count);
           }
         }
-        notify(`Imported ${count} ${importType}!`);
+        notify(`Imported ${count} items!`);
         setImportModalOpen(false);
       } catch (err) { notify("Import failed", "error"); }
       setIsUploading(false);
@@ -199,45 +213,51 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20 print:bg-white print:pb-0">
-      {/* Hidden Table for Printing */}
-      <div className="hidden print:block p-8">
-        <div className="flex justify-between items-end border-b-4 border-slate-900 pb-4 mb-8">
+      
+      {/* Hidden Layout for Printing */}
+      <div className="hidden print:block p-10">
+        <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10">
           <div>
             <h1 className="text-4xl font-black tracking-tighter uppercase">Locker Assignment Report</h1>
-            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-1">WRMS Middle School • {new Date().toLocaleDateString()}</p>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">WRMS Middle School • Printed: {new Date().toLocaleString()}</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Filter: {locationFilter}</p>
-            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Combo Set: #{activeSet}</p>
+          <div className="text-right space-y-1">
+            <div className="bg-slate-900 text-white px-3 py-1 rounded text-[10px] font-black uppercase inline-block">Report Key</div>
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Wing: {locationFilter}</p>
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Active Set: #{activeSet}</p>
           </div>
         </div>
+        
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-slate-100 border-b-2 border-slate-900 text-left">
-              <th className="p-3 text-xs font-black uppercase tracking-widest">Locker #</th>
-              <th className="p-3 text-xs font-black uppercase tracking-widest">Student Name</th>
-              <th className="p-3 text-xs font-black uppercase tracking-widest">Location</th>
-              <th className="p-3 text-xs font-black uppercase tracking-widest">Combination</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Locker #</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Student Name</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Wing / Location</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Active Combination</th>
             </tr>
           </thead>
           <tbody>
             {filteredLockers.map(l => (
-              <tr key={l.id} className="border-b border-slate-200">
-                <td className="p-3 font-mono font-black text-lg">#{l.lockerNumber}</td>
-                <td className={`p-3 font-bold ${!l.studentName ? 'text-slate-300 italic' : ''}`}>
-                  {l.studentName || "Available"}
+              <tr key={l.id} className="border-b border-slate-200 hover:bg-slate-50">
+                <td className="p-4 font-mono font-black text-xl text-slate-900">#{l.lockerNumber}</td>
+                <td className={`p-4 font-bold text-lg ${!l.studentName ? 'text-slate-300 italic' : 'text-slate-800'}`}>
+                  {l.studentName || "UNASSIGNED"}
                 </td>
-                <td className="p-3 text-sm text-slate-500 font-bold uppercase tracking-wide">{l.location}</td>
-                <td className="p-3 font-mono font-bold">{l[`combination${activeSet}`] || "N/A"}</td>
+                <td className="p-4 text-xs text-slate-500 font-black uppercase tracking-widest">{l.location}</td>
+                <td className="p-4 font-mono font-black text-blue-600">{l[`combination${activeSet}`] || "0-0-0"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="mt-8 text-[10px] text-slate-400 font-bold uppercase text-center border-t pt-4">
-          End of Report • Total Count: {filteredLockers.length} Lockers
+        
+        <div className="mt-12 pt-6 border-t border-slate-100 flex justify-between text-[10px] text-slate-400 font-black uppercase tracking-widest">
+          <span>End of Report</span>
+          <span>Record Count: {filteredLockers.length} Lockers</span>
         </div>
       </div>
 
+      {/* Main Dashboard UI (Hides during print) */}
       <header className="bg-white border-b sticky top-0 z-40 p-4 flex justify-between items-center shadow-sm print:hidden">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-2 rounded-lg text-white font-black text-xs shadow-md">WRMS</div>
@@ -249,12 +269,12 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden lg:flex gap-1 items-center mr-4 border-r pr-4 border-slate-200">
-            <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest uppercase">Set:</span>
+            <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest uppercase">Combo Set:</span>
             {[1,2,3,4,5].map(n => (
-              <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400'}`}>{n}</button>
+              <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400 hover:bg-slate-300'}`}>{n}</button>
             ))}
           </div>
-          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Bulk Upload"><FileUp size={20}/></button>
+          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Import Data"><FileUp size={20}/></button>
           <button onClick={() => window.print()} className="p-2 text-slate-400 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm" title="Print Report"><Printer size={20}/></button>
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100 active:scale-95 transition-transform hover:bg-blue-700">+ NEW</button>
         </div>
@@ -264,9 +284,9 @@ export default function App() {
         {view === 'inventory' && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-              <StatCard label="Total" value={lockers.length} color="blue" />
-              <StatCard label="Empty" value={lockers.filter(l => !l.studentName).length} color="emerald" />
-              <StatCard label="Issues" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
+              <StatCard label="Total Lockers" value={lockers.length} color="blue" />
+              <StatCard label="Available" value={lockers.filter(l => !l.studentName).length} color="emerald" />
+              <StatCard label="Broken" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
               <StatCard label="Active Set" value={`#${activeSet}`} color="blue" />
             </div>
 
@@ -356,8 +376,8 @@ export default function App() {
                   </div>
                   <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-2 text-slate-400 mb-2">
-                      <Contact size={16} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">ID Card</span>
+                      <IdCard size={16} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Student ID</span>
                     </div>
                     <p className="text-2xl font-black text-slate-900">{currentStudentDetails.studentId || "N/A"}</p>
                   </div>
@@ -391,7 +411,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Modals */}
+      {/* Import Modal */}
       {importModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
@@ -405,7 +425,8 @@ export default function App() {
               <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white cursor-pointer shadow-sm hover:file:bg-blue-700 transition-all" />
               {isUploading && (
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in slide-in-from-bottom-2">
-                  <div className="text-xs font-black uppercase text-slate-400 tracking-widest text-center">Processing {progress} of {totalToUpload}</div>
+                  <Loader2 className="animate-spin text-blue-600 mx-auto mb-2" size={24}/>
+                  <div className="text-xs font-black uppercase text-slate-400 tracking-widest text-center">Processing {progress} of {totalToUpload}...</div>
                 </div>
               )}
             </div>
@@ -494,7 +515,7 @@ export default function App() {
               <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
               <div className="flex gap-3">
                  <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
-                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform hover:bg-rose-700">Submit</button>
               </div>
            </form>
         </div>
