@@ -3,7 +3,7 @@ import {
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, Contact, School, Printer, IdCard
+  GraduationCap, School, Printer, IdCard, Contact
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -20,8 +20,7 @@ import {
   updateDoc, 
   setDoc,
   deleteDoc, 
-  query,
-  getDocs
+  query 
 } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
@@ -97,6 +96,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+    
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const lockersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lockers');
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -118,7 +118,12 @@ export default function App() {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubSettings(); unsubLockers(); unsubStudents(); unsubLogs(); };
+    return () => {
+      unsubSettings();
+      unsubLockers();
+      unsubStudents();
+      unsubLogs();
+    };
   }, [user]);
 
   const notify = (message, type = 'success') => {
@@ -138,6 +143,8 @@ export default function App() {
     const file = e.target.files[0];
     if (!file || !user) return;
     setIsUploading(true);
+    setProgress(0);
+    
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -194,7 +201,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
         <h1 className="text-xl font-black text-slate-800 tracking-tighter uppercase">WRMS Locker System</h1>
-        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Initializing Database...</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Connecting to database...</p>
       </div>
     );
   }
@@ -207,19 +214,20 @@ export default function App() {
         <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10">
           <div>
             <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900 text-left">Assignment Report</h1>
-            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">{new Date().toLocaleDateString()}</p>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">WRMS Middle School • Printed: {new Date().toLocaleString()}</p>
           </div>
           <div className="text-right">
             <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Wing: {locationFilter}</p>
-            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Set: #{activeSet}</p>
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Active Set: #{activeSet}</p>
           </div>
         </div>
+        
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-slate-100 border-b-2 border-slate-900 text-left text-slate-600">
               <th className="p-4 text-[10px] font-black uppercase tracking-widest">Locker #</th>
               <th className="p-4 text-[10px] font-black uppercase tracking-widest">Student Name</th>
-              <th className="p-4 text-[10px] font-black uppercase tracking-widest">Location</th>
+              <th className="p-4 text-[10px] font-black uppercase tracking-widest">Wing / Location</th>
               <th className="p-4 text-[10px] font-black uppercase tracking-widest text-blue-600">Active Code</th>
             </tr>
           </thead>
@@ -271,8 +279,8 @@ export default function App() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
               <StatCard label="Total Lockers" value={lockers.length} color="blue" />
-              <StatCard label="Empty" value={lockers.filter(l => !l.studentName).length} color="emerald" />
-              <StatCard label="Issues" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
+              <StatCard label="Available" value={lockers.filter(l => !l.studentName).length} color="emerald" />
+              <StatCard label="Broken" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
               <StatCard label="Active Set" value={`#${activeSet}`} color="blue" />
             </div>
 
@@ -297,7 +305,10 @@ export default function App() {
                   <div key={l.id} className={`bg-white border rounded-[2rem] p-6 group relative shadow-sm transition-all hover:shadow-md ${isUnusable ? 'border-rose-200 bg-rose-50/20' : l.studentName ? 'border-blue-100 bg-blue-50/10' : 'border-slate-200'}`}>
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <div className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</span>
+                          {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-sm animate-pulse">Broken</span>}
+                        </div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mt-1 tracking-widest"><MapPin size={10}/> {l.location || "Hall"}</div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -360,7 +371,7 @@ export default function App() {
             </div>
             <div className="text-center">
               <button onClick={() => { setImportType('students'); setImportModalOpen(true); }} className="text-blue-600 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline transition-all active:scale-95">
-                <FileUp size={16} /> Upload Student List (.csv)
+                <FileUp size={16} /> Upload Student CSV
               </button>
             </div>
           </div>
