@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createRoot } from 'react-dom/client';
 import { 
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, Contact, IdCard
+  GraduationCap, School, Printer, Contact, IdCard, Upload
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -53,7 +52,7 @@ const StatCard = ({ label, value, color }) => (
 
 // --- Main Application ---
 
-export function App() {
+export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [lockers, setLockers] = useState([]);
@@ -74,6 +73,7 @@ export function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [totalToUpload, setTotalToUpload] = useState(0);
+  const [selectedFile, setSelectedFile] = useState(null);
   
   const [activeLockerForAssign, setActiveLockerForAssign] = useState(null);
   const [activeLockerForStatus, setActiveLockerForStatus] = useState(null);
@@ -140,9 +140,8 @@ export function App() {
     } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
 
-  const handleCSVImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !user) return;
+  const startCSVImport = async () => {
+    if (!selectedFile || !user) return;
     setIsUploading(true);
     setProgress(0);
     
@@ -178,10 +177,11 @@ export function App() {
         }
         notify(`Imported ${count} items!`);
         setImportModalOpen(false);
+        setSelectedFile(null);
       } catch (err) { notify("Import failed", "error"); }
       setIsUploading(false);
     };
-    reader.readAsText(file);
+    reader.readAsText(selectedFile);
   };
 
   const currentStudentDetails = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
@@ -202,7 +202,7 @@ export function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
         <h1 className="text-xl font-black text-slate-800 tracking-tighter uppercase">WRMS Locker System</h1>
-        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Connecting to database...</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2 animate-pulse">Initializing school database...</p>
       </div>
     );
   }
@@ -334,19 +334,33 @@ export function App() {
         )}
 
         {view === 'students' && (
-          <div className="max-w-3xl mx-auto animate-in fade-in duration-300">
-            <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8 text-center">
-              <h2 className="text-3xl font-black mb-8 tracking-tighter flex items-center justify-center gap-3 text-slate-800">
-                <GraduationCap className="text-blue-600" size={32} /> Student Lookup
-              </h2>
-              <div className="relative mb-10">
-                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
-                <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer hover:bg-slate-100 transition-colors">
-                  <option value="">Choose a student...</option>
-                  {[...students].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
+          <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8 text-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-10 opacity-5">
+                <GraduationCap size={120} />
               </div>
+              
+              <h2 className="text-3xl font-black mb-1 tracking-tighter text-slate-800">Student Directory</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-10">Look up details or update the student list</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+                <div className="relative">
+                  <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
+                  <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                    <option value="">Choose a student...</option>
+                    {[...students].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
+                </div>
+                
+                <button 
+                  onClick={() => { setImportType('students'); setImportModalOpen(true); }}
+                  className="bg-blue-600 text-white rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 py-5"
+                >
+                  <Upload size={18} /> Upload Student CSV
+                </button>
+              </div>
+
               {currentStudentDetails ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200 text-left">
                   <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 shadow-sm">
@@ -362,12 +376,12 @@ export function App() {
                     <p className="text-2xl font-black">{currentStudentDetails.studentId || "N/A"}</p>
                   </div>
                 </div>
-              ) : <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl uppercase text-[10px] tracking-[0.2em]">Select a student to view details</div>}
-            </div>
-            <div className="text-center">
-              <button onClick={() => { setImportType('students'); setImportModalOpen(true); }} className="text-blue-600 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline transition-all active:scale-95">
-                <FileUp size={16} /> Upload Student CSV
-              </button>
+              ) : (
+                <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
+                   <IdCard className="mx-auto text-slate-100 mb-4" size={64} />
+                   <p className="text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">Select a student to view school details</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -391,21 +405,61 @@ export function App() {
         )}
       </main>
 
-      {/* Modals */}
+      {/* Bulk Upload Modal */}
       {importModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
-            <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Bulk Upload</h2>
-            <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-xl shadow-inner">
-               <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Lockers</button>
-               <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
+            <div className="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-6 shadow-inner"><FileUp size={40}/></div>
+            <h2 className="text-3xl font-black mb-2 tracking-tighter text-slate-800">Bulk Upload</h2>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">Select category and pick CSV file</p>
+            
+            <div className="space-y-6">
+              <div className="flex gap-2 bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
+                 <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Lockers</button>
+                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
+              </div>
+              
+              <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 bg-slate-50/50 relative">
+                <input 
+                  type="file" 
+                  accept=".csv" 
+                  onChange={(e) => setSelectedFile(e.target.files[0])} 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                />
+                {selectedFile ? (
+                  <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest">
+                    <CheckCircle size={18} /> {selectedFile.name}
+                  </div>
+                ) : (
+                  <div className="text-slate-400 font-black text-xs uppercase tracking-widest">
+                    Click to Choose File
+                  </div>
+                )}
+              </div>
+
+              {selectedFile && (
+                <button 
+                  onClick={startCSVImport}
+                  disabled={isUploading}
+                  className="w-full bg-emerald-600 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-xs shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                >
+                  {isUploading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}
+                  {isUploading ? `Importing ${progress}/${totalToUpload}` : "Start Import Now"}
+                </button>
+              )}
             </div>
-            <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white" />
-            <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors text-center block w-full">Close</button>
+            
+            <button 
+              onClick={() => { setImportModalOpen(false); setSelectedFile(null); }} 
+              className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors text-center block w-full"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
 
+      {/* Manual Add Locker Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in duration-200">
           <form onSubmit={async (e) => {
@@ -451,6 +505,7 @@ export function App() {
         </div>
       )}
 
+      {/* Assign Modal */}
       {isAssignModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
            <form onSubmit={async (e) => {
@@ -470,6 +525,7 @@ export function App() {
         </div>
       )}
 
+      {/* Mark Broken Modal */}
       {isUnusableModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
            <form onSubmit={async (e) => {
@@ -499,11 +555,4 @@ export function App() {
       )}
     </div>
   );
-}
-
-// --- START COMMAND (The part that makes it display on Vercel) ---
-const container = document.getElementById('root');
-if (container) {
-  const root = createRoot(container);
-  root.render(<App />);
 }
