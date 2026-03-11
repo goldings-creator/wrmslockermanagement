@@ -2,25 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, User, UserPlus, UserMinus, Trash2, FileUp, 
   CheckCircle, MapPin, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, BookOpen, Upload
+  Printer, BookOpen, Upload
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  setDoc,
-  deleteDoc, 
-  query 
-} from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, collection, onSnapshot, addDoc, updateDoc, setDoc, deleteDoc, query } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -32,12 +18,13 @@ const firebaseConfig = {
   appId: "1:870499565234:web:31b19a27693bfd6c1313ab"
 };
 
-// Safety check to prevent hot-reloading crashes
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
+const appId = 'wrms-locker-system';
+const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Science Wing"];
 
-// --- Shared UI Components ---
+// --- UI Components ---
 const StatCard = ({ label, value, color }) => (
   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md print:hidden relative overflow-hidden">
     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</div>
@@ -48,9 +35,6 @@ const StatCard = ({ label, value, color }) => (
 
 // --- Main App Component ---
 export default function App() {
-  const appId = 'wrms-locker-system';
-  const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Science Wing"];
-
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [lockers, setLockers] = useState([]);
@@ -78,31 +62,26 @@ export default function App() {
   const [viewingCombination, setViewingCombination] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // Authentication Setup with Forced Timeout Unblocker
+  // THE FAILSAFE: Drops the loading screen after 1.5 seconds NO MATTER WHAT.
   useEffect(() => {
     let isMounted = true;
+    
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setIsAuthLoading(false);
+    }, 1500);
 
-    const login = async () => {
-      try {
-        // This races the auth request against a 1.5-second timer. 
-        // If your browser blocks Firebase, this forces the loading screen to drop anyway!
-        const authPromise = signInAnonymously(auth);
-        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
-        
-        await Promise.race([authPromise, timeoutPromise]);
-      } catch (err) {
-        console.warn("Auth took too long or was blocked. Bypassing loading screen.");
-      } finally {
-        if (isMounted) setIsAuthLoading(false);
-      }
-    };
-    
-    login();
+    signInAnonymously(auth)
+      .catch((err) => console.warn("Firebase Auth blocked:", err))
+      .finally(() => {
+         if (isMounted) setIsAuthLoading(false);
+         clearTimeout(safetyTimer);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, setUser);
-    
     return () => {
       isMounted = false;
       unsubscribe();
+      clearTimeout(safetyTimer);
     };
   }, []);
 
@@ -115,7 +94,6 @@ export default function App() {
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
     const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'maintenance');
 
-    // Added empty error callbacks so Firebase permission errors don't crash the app
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) setActiveSet(docSnap.data().activeSet || 4);
     }, () => {});
@@ -166,11 +144,10 @@ export default function App() {
 
         for (const row of rows) {
           const p = row.split(',').map(s => s?.trim());
-          
           if (p[0]) {
             if (importType === 'lockers') {
               await addDoc(colRef, {
-                lockerNumber: p[0], 
+                lockerNumber: String(p[0]), 
                 studentName: p[1] || "", 
                 combination1: p[2] || "00-00-00", 
                 combination2: p[3] || "00-00-00", 
@@ -182,7 +159,7 @@ export default function App() {
               });
             } else {
               await addDoc(colRef, {
-                name: p[0], 
+                name: String(p[0]), 
                 grade: p[1] || "N/A", 
                 homeroom: p[2] || "N/A", 
                 studentId: p[3] || "N/A",
@@ -211,12 +188,12 @@ export default function App() {
   const filteredLockers = useMemo(() => {
     return lockers
       .filter(l => {
-        const matchesSearch = (l.lockerNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
-                             (l.studentName || "").toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = String(l.lockerNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              String(l.studentName || "").toLowerCase().includes(searchTerm.toLowerCase());
         const matchesLocation = locationFilter === "All Locations" || l.location === locationFilter;
         return matchesSearch && matchesLocation;
       })
-      .sort((a, b) => (a.lockerNumber || "").localeCompare(b.lockerNumber || "", undefined, {numeric: true}));
+      .sort((a, b) => String(a.lockerNumber || "").localeCompare(String(b.lockerNumber || ""), undefined, {numeric: true}));
   }, [lockers, searchTerm, locationFilter]);
 
   if (isAuthLoading) {
@@ -232,7 +209,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20 print:bg-white print:pb-0">
       
-      {/* Hidden Layout for Print Reports */}
+      {/* Print View */}
       <div className="hidden print:block p-10">
         <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10 text-left">
           <div>
@@ -286,6 +263,7 @@ export default function App() {
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>{n}</button>
             ))}
           </div>
+          <button onClick={() => { setImportType('lockers'); setImportModalOpen(true); }} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg border border-slate-200" title="Import Locker CSV"><FileUp size={18}/></button>
           <button onClick={() => window.print()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg border border-slate-200" title="Print Report"><Printer size={18}/></button>
           <button onClick={() => {setIsModalOpen(true);}} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100">+ NEW</button>
         </div>
@@ -295,9 +273,9 @@ export default function App() {
         {view === 'inventory' && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-              <StatCard label="Total Lockers" value={lockers.length} color="blue" />
-              <StatCard label="Available" value={lockers.filter(l => !l.studentName).length} color="emerald" />
-              <StatCard label="Broken" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
+              <StatCard label="Total" value={lockers.length} color="blue" />
+              <StatCard label="Empty" value={lockers.filter(l => !l.studentName).length} color="emerald" />
+              <StatCard label="Issues" value={maintenanceLogs.filter(l => l.status === 'pending').length} color="rose" />
               <StatCard label="Active Set" value={`#${activeSet}`} color="blue" />
             </div>
 
@@ -366,7 +344,7 @@ export default function App() {
                   <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
                   <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer hover:bg-slate-100 transition-colors">
                     <option value="">Select Student...</option>
-                    {[...students].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {[...students].sort((a,b) => String(a.name || "").localeCompare(String(b.name || ""))).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
                 </div>
@@ -568,4 +546,13 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// --- Mount Command ---
+// Ensures standard rendering locally or in standard bundlers
+export const renderApp = () => {
+    const el = document.getElementById('root')
+    if (el) {
+        createRoot(el).render(<App />)
+    }
 }
