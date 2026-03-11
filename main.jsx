@@ -51,45 +51,15 @@ const StatCard = ({ label, value, color }) => (
   </div>
 );
 
-// --- Sub-View: Maintenance List ---
-const MaintenanceView = ({ logs, onUpdate }) => {
-  const pending = logs.filter(l => l.status === 'pending');
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="bg-rose-50 border border-rose-100 p-10 rounded-[2.5rem] text-center">
-        <Ban className="w-16 h-16 text-rose-500 mx-auto mb-4" />
-        <h2 className="text-3xl font-black text-rose-900 tracking-tighter">{pending.length} Broken Lockers</h2>
-        <p className="text-rose-600 font-medium text-sm italic">Reported issues currently awaiting maintenance.</p>
-      </div>
-      <div className="grid gap-4">
-        {pending.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(log => (
-          <div key={log.id} className="bg-white p-6 rounded-[1.5rem] border border-slate-200 flex justify-between items-center shadow-sm">
-            <div className="flex items-center gap-5">
-               <div className="bg-rose-100 w-14 h-14 rounded-2xl flex items-center justify-center text-rose-600 font-black text-xl">#{log.lockerNumber}</div>
-               <div>
-                  <p className="font-black text-slate-900 text-lg">{log.issue}</p>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Reported: {new Date(log.createdAt).toLocaleDateString()}</p>
-               </div>
-            </div>
-            <button onClick={() => onUpdate(log.id, { status: 'resolved' })} className="px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 transition-all">
-              Mark Fixed
-            </button>
-          </div>
-        ))}
-        {pending.length === 0 && <div className="p-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-[2rem]">No active maintenance issues.</div>}
-      </div>
-    </div>
-  );
-};
-
-// --- Main App Component ---
+// --- Main Application ---
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [lockers, setLockers] = useState([]);
   const [students, setStudents] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
-  const [activeSet, setActiveSet] = useState(4); // Defaults to Set 4
+  const [activeSet, setActiveSet] = useState(4); // Default to Set #4
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -116,6 +86,8 @@ export default function App() {
         await signInAnonymously(auth);
       } catch (err) {
         console.error("Auth error", err);
+      } finally {
+        setIsAuthLoading(false);
       }
     };
     initAuth();
@@ -136,7 +108,7 @@ export default function App() {
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => notify("Database Error", "error"));
+    }, (err) => notify("Database Connection Issue", "error"));
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -158,7 +130,7 @@ export default function App() {
     try {
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
       await setDoc(settingsRef, { activeSet: newSet }, { merge: true });
-      notify(`Switching all to Set #${newSet}`);
+      notify(`Global Set switched to #${newSet}`);
     } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
 
@@ -176,12 +148,10 @@ export default function App() {
         setTotalToUpload(rows.length);
         let count = 0;
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', importType);
-
         for (const row of rows) {
           const p = row.split(',').map(s => s?.trim());
           if (p[0]) {
             if (importType === 'lockers') {
-              // Format: Number, Name, S1, S2, S3, S4, S5, Location
               await addDoc(colRef, {
                 lockerNumber: p[0], studentName: p[1] || "", 
                 combination1: p[2] || "0-0-0", combination2: p[3] || "0-0-0", 
@@ -190,7 +160,6 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
-              // Format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -220,6 +189,18 @@ export default function App() {
       })
       .sort((a, b) => (a.lockerNumber || "").localeCompare(b.lockerNumber || "", undefined, {numeric: true}));
   }, [lockers, searchTerm, locationFilter]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-10">
+        <div className="text-center">
+          <Loader2 className="animate-spin text-blue-600 mx-auto mb-4" size={48} />
+          <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">WRMS Locker System</h1>
+          <p className="text-slate-400 font-medium animate-pulse">Initializing school database...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
@@ -286,7 +267,6 @@ export default function App() {
                          <button onClick={() => { if(window.confirm('Delete locker?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', l.id))}} className="p-2 text-slate-200 hover:text-red-500 transition-colors" title="Delete"><Trash2 size={16}/></button>
                       </div>
                     </div>
-                    
                     <div className="flex items-center justify-between mb-5">
                       <div className={`truncate font-bold text-sm ${l.studentName ? 'text-slate-900' : 'text-slate-300 italic'}`}>{l.studentName || "Available"}</div>
                       {!isUnusable && (
@@ -295,7 +275,6 @@ export default function App() {
                         <button onClick={() => {setActiveLockerForAssign(l); setIsAssignModalOpen(true);}} className="text-emerald-400 hover:text-emerald-600 transition-colors"><UserPlus size={20}/></button>
                       )}
                     </div>
-
                     <div className="bg-slate-50 rounded-2xl p-4 flex justify-between items-center border border-slate-100 shadow-inner">
                       <div className="flex items-center gap-2">
                          <div className="w-6 h-6 rounded-lg bg-slate-800 text-[10px] flex items-center justify-center text-white font-black">{activeSet}</div>
@@ -324,7 +303,6 @@ export default function App() {
                 </select>
                 <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
               </div>
-
               {currentStudentDetails ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-200">
                   <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100">
@@ -349,7 +327,7 @@ export default function App() {
                     <p className="text-2xl font-black text-slate-900">{currentStudentDetails.studentId || "N/A"}</p>
                   </div>
                 </div>
-              ) : <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl">Select a student above to view their school details.</div>}
+              ) : <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl text-sm uppercase tracking-widest">Select a student above to view details.</div>}
             </div>
             <div className="text-center">
               <button onClick={() => { setImportType('students'); setImportModalOpen(true); }} className="text-blue-600 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline transition-all">
@@ -360,14 +338,25 @@ export default function App() {
         )}
 
         {view === 'maintenance' && (
-          <MaintenanceView logs={maintenanceLogs} onUpdate={(id, data) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', id), data)} />
+          <div className="grid gap-4 animate-in fade-in duration-300">
+             {maintenanceLogs.filter(l => l.status === 'pending').map(log => (
+               <div key={log.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm">
+                  <div>
+                    <h3 className="font-black text-lg text-slate-900 tracking-tighter">Locker #{log.lockerNumber}</h3>
+                    <p className="text-slate-500 font-medium">{log.issue}</p>
+                  </div>
+                  <button onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', log.id), { status: 'resolved' })} className="bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-emerald-700 transition-all">Mark Fixed</button>
+               </div>
+             ))}
+             {maintenanceLogs.filter(l => l.status === 'pending').length === 0 && <div className="p-20 text-center text-slate-300 italic font-black uppercase tracking-tighter text-2xl opacity-50">Clean Slate — No broken lockers!</div>}
+          </div>
         )}
       </main>
 
-      {/* Modals */}
+      {/* Import Modal */}
       {importModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl">
+          <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
             <div className="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-6"><FileUp size={40}/></div>
             <h2 className="text-3xl font-black mb-2 tracking-tighter">Bulk Upload</h2>
             <div className="space-y-4">
@@ -399,7 +388,7 @@ export default function App() {
              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', activeLockerForAssign.id), { studentName: name });
              setIsAssignModalOpen(false);
              notify(`Assigned to ${name}`);
-           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200">
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200 border border-slate-100">
               <h2 className="text-3xl font-black mb-8 tracking-tighter">Assign #{activeLockerForAssign?.lockerNumber}</h2>
               <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Enter Full Name" />
               <div className="flex gap-3">
@@ -420,13 +409,13 @@ export default function App() {
              });
              setIsUnusableModalOpen(false);
              notify("Report submitted");
-           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200">
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100">
               <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600">Mark Broken</h2>
-              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic">#{activeLockerForStatus?.lockerNumber}</p>
+              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
               <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
               <div className="flex gap-3">
                  <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
-                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform">Submit</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
               </div>
            </form>
         </div>
@@ -446,16 +435,16 @@ export default function App() {
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lockers'), data);
             setIsModalOpen(false);
             notify("Locker created");
-          }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl">
+          }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100">
              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">New Locker Record</h2>
              <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
-                   <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all" placeholder="101" />
+                   <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="101" />
                 </div>
                 <div>
                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Wing/Floor</label>
-                   <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all">
+                   <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all shadow-inner">
                     {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
                    </select>
                 </div>
