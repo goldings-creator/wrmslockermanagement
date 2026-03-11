@@ -3,7 +3,7 @@ import {
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, IdCard, School
+  GraduationCap, Contact, School
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -34,9 +34,9 @@ const firebaseConfig = {
   appId: "1:870499565234:web:31b19a27693bfd6c1313ab"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
 const appId = 'wrms-locker-system';
 
 const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Science Wing"];
@@ -44,7 +44,7 @@ const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Sc
 // --- UI Components ---
 
 const StatCard = ({ label, value, color }) => (
-  <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden transition-all hover:shadow-md`}>
+  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</div>
     <div className="text-2xl font-black text-slate-900">{value}</div>
     <div className={`absolute bottom-0 left-0 w-full h-1 ${color === 'blue' ? 'bg-blue-500' : color === 'rose' ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>
@@ -59,7 +59,7 @@ const MaintenanceView = ({ logs, onUpdate }) => {
       <div className="bg-rose-50 border border-rose-100 p-10 rounded-[2.5rem] text-center">
         <Ban className="w-16 h-16 text-rose-500 mx-auto mb-4" />
         <h2 className="text-3xl font-black text-rose-900 tracking-tighter">{pending.length} Broken Lockers</h2>
-        <p className="text-rose-600 font-medium">Locker maintenance and repair requests.</p>
+        <p className="text-rose-600 font-medium text-sm italic">Reported issues currently awaiting maintenance.</p>
       </div>
       <div className="grid gap-4">
         {pending.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(log => (
@@ -71,14 +71,12 @@ const MaintenanceView = ({ logs, onUpdate }) => {
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Reported: {new Date(log.createdAt).toLocaleDateString()}</p>
                </div>
             </div>
-            <button onClick={() => onUpdate(log.id, { status: 'resolved' })} className="px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 text-white shadow-lg hover:bg-emerald-700">
+            <button onClick={() => onUpdate(log.id, { status: 'resolved' })} className="px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 transition-all">
               Mark Fixed
             </button>
           </div>
         ))}
-        {pending.length === 0 && (
-          <div className="p-20 text-center text-slate-300 font-bold italic">No active maintenance issues.</div>
-        )}
+        {pending.length === 0 && <div className="p-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-[2rem]">No active maintenance issues.</div>}
       </div>
     </div>
   );
@@ -91,7 +89,7 @@ export default function App() {
   const [lockers, setLockers] = useState([]);
   const [students, setStudents] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
-  const [activeSet, setActiveSet] = useState(4); 
+  const [activeSet, setActiveSet] = useState(4); // Defaults to Set 4
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -112,7 +110,6 @@ export default function App() {
   const [viewingCombination, setViewingCombination] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // Authentication Setup
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -126,10 +123,8 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Data Listeners
   useEffect(() => {
     if (!user) return;
-    
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const lockersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lockers');
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -163,7 +158,7 @@ export default function App() {
     try {
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
       await setDoc(settingsRef, { activeSet: newSet }, { merge: true });
-      notify(`Global Set switched to #${newSet}`);
+      notify(`Switching all to Set #${newSet}`);
     } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
 
@@ -180,13 +175,13 @@ export default function App() {
         const rows = text.split(/\r?\n/).filter(r => r.trim() !== '').slice(1);
         setTotalToUpload(rows.length);
         let count = 0;
-        
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', importType);
 
         for (const row of rows) {
           const p = row.split(',').map(s => s?.trim());
           if (p[0]) {
             if (importType === 'lockers') {
+              // Format: Number, Name, S1, S2, S3, S4, S5, Location
               await addDoc(colRef, {
                 lockerNumber: p[0], studentName: p[1] || "", 
                 combination1: p[2] || "0-0-0", combination2: p[3] || "0-0-0", 
@@ -195,7 +190,7 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
-              // Student format: Name, Grade, Homeroom, ID
+              // Format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -205,7 +200,7 @@ export default function App() {
             setProgress(count);
           }
         }
-        notify(`Imported ${count} ${importType}!`);
+        notify(`Imported ${count} items!`);
         setImportModalOpen(false);
       } catch (err) { notify("Import failed", "error"); }
       setIsUploading(false);
@@ -213,9 +208,7 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const currentStudentDetails = useMemo(() => {
-    return students.find(s => s.id === selectedStudentId);
-  }, [students, selectedStudentId]);
+  const currentStudentDetails = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
 
   const filteredLockers = useMemo(() => {
     return lockers
@@ -240,7 +233,7 @@ export default function App() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          <div className="hidden lg:flex gap-1 items-center mr-4">
+          <div className="hidden lg:flex gap-1 items-center mr-4 border-r pr-4 border-slate-200">
             <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest uppercase">Combo Set:</span>
             {[1,2,3,4,5].map(n => (
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400 hover:bg-slate-300'}`}>{n}</button>
@@ -268,11 +261,7 @@ export default function App() {
               </div>
               <div className="relative min-w-[220px]">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <select 
-                  value={locationFilter} 
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full pl-11 pr-10 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm appearance-none font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition-colors"
-                >
+                <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="w-full pl-11 pr-10 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm appearance-none font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition-colors">
                   {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
@@ -288,13 +277,13 @@ export default function App() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</span>
-                          {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest">Broken</span>}
+                          {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-sm">Broken</span>}
                         </div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mt-1 tracking-widest"><MapPin size={10}/> {l.location || "Hall"}</div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button onClick={() => { setActiveLockerForStatus(l); setIsUnusableModalOpen(true); }} className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Ban size={16}/></button>
-                         <button onClick={() => { if(window.confirm('Delete locker?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', l.id))}} className="p-2 text-slate-200 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                         <button onClick={() => { setActiveLockerForStatus(l); setIsUnusableModalOpen(true); }} className="p-2 text-slate-300 hover:text-rose-500 transition-colors" title="Mark Broken"><Ban size={16}/></button>
+                         <button onClick={() => { if(window.confirm('Delete locker?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', l.id))}} className="p-2 text-slate-200 hover:text-red-500 transition-colors" title="Delete"><Trash2 size={16}/></button>
                       </div>
                     </div>
                     
@@ -325,21 +314,13 @@ export default function App() {
           <div className="max-w-3xl mx-auto animate-in fade-in duration-300">
             <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8">
               <h2 className="text-3xl font-black mb-6 tracking-tighter flex items-center gap-3 text-slate-800">
-                <GraduationCap className="text-blue-600" size={32} />
-                Student Lookup
+                <GraduationCap className="text-blue-600" size={32} /> Student Lookup
               </h2>
-              
               <div className="relative mb-10">
                 <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
-                <select 
-                  value={selectedStudentId} 
-                  onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer hover:bg-slate-100 transition-colors"
-                >
+                <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer hover:bg-slate-100 transition-colors">
                   <option value="">Choose a student...</option>
-                  {[...students].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
+                  {[...students].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={24} />
               </div>
@@ -362,24 +343,16 @@ export default function App() {
                   </div>
                   <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
                     <div className="flex items-center gap-2 text-slate-400 mb-2">
-                      <IdCard size={16} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Student ID</span>
+                      <Contact size={16} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">ID Card</span>
                     </div>
                     <p className="text-2xl font-black text-slate-900">{currentStudentDetails.studentId || "N/A"}</p>
                   </div>
                 </div>
-              ) : (
-                <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl">
-                  Select a student above to view their details.
-                </div>
-              )}
+              ) : <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl">Select a student above to view their school details.</div>}
             </div>
-            
             <div className="text-center">
-              <button 
-                onClick={() => { setImportType('students'); setImportModalOpen(true); }}
-                className="text-blue-600 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline"
-              >
+              <button onClick={() => { setImportType('students'); setImportModalOpen(true); }} className="text-blue-600 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:underline transition-all">
                 <FileUp size={16} /> Upload Student CSV
               </button>
             </div>
@@ -387,10 +360,7 @@ export default function App() {
         )}
 
         {view === 'maintenance' && (
-          <MaintenanceView 
-            logs={maintenanceLogs} 
-            onUpdate={(id, data) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', id), data)} 
-          />
+          <MaintenanceView logs={maintenanceLogs} onUpdate={(id, data) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', id), data)} />
         )}
       </main>
 
@@ -399,30 +369,24 @@ export default function App() {
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl">
             <div className="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-6"><FileUp size={40}/></div>
-            <h2 className="text-3xl font-black mb-2 tracking-tighter">Bulk Upload {importType === 'lockers' ? 'Lockers' : 'Students'}</h2>
-            <p className="text-slate-400 text-sm mb-8 font-medium italic">
-              {importType === 'lockers' 
-                ? 'Columns: Number, Student, Sets 1-5, Location' 
-                : 'Columns: Name, Grade, Homeroom, ID'}
-            </p>
-            
+            <h2 className="text-3xl font-black mb-2 tracking-tighter">Bulk Upload</h2>
             <div className="space-y-4">
               <div className="flex gap-2 mb-4 justify-center bg-slate-100 p-1 rounded-xl">
                  <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Lockers</button>
                  <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
               </div>
-              <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white cursor-pointer" />
+              <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white cursor-pointer shadow-sm" />
               {isUploading && (
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <Loader2 className="animate-spin text-blue-600 mx-auto mb-2" size={24}/>
-                  <div className="text-xs font-black uppercase text-slate-400 text-center tracking-widest">Processing {progress} of {totalToUpload}</div>
+                  <div className="text-xs font-black uppercase text-slate-400 tracking-widest text-center">Processing {progress} of {totalToUpload}</div>
                   <div className="w-full h-2 bg-slate-200 rounded-full mt-3 overflow-hidden">
                     <div className="h-full bg-blue-600 transition-all duration-300" style={{width: `${(progress/totalToUpload)*100}%`}}></div>
                   </div>
                 </div>
               )}
             </div>
-            <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500">Close</button>
+            <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors">Close</button>
           </div>
         </div>
       )}
@@ -439,7 +403,7 @@ export default function App() {
               <h2 className="text-3xl font-black mb-8 tracking-tighter">Assign #{activeLockerForAssign?.lockerNumber}</h2>
               <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Enter Full Name" />
               <div className="flex gap-3">
-                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest transition-colors hover:text-slate-500">Cancel</button>
+                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
                 <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
               </div>
            </form>
@@ -458,11 +422,11 @@ export default function App() {
              notify("Report submitted");
            }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200">
               <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600">Mark Broken</h2>
-              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic">Locker #{activeLockerForStatus?.lockerNumber}</p>
+              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic">#{activeLockerForStatus?.lockerNumber}</p>
               <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
               <div className="flex gap-3">
                  <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
-                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform">Submit</button>
               </div>
            </form>
         </div>
@@ -481,33 +445,33 @@ export default function App() {
             };
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lockers'), data);
             setIsModalOpen(false);
-            notify("Locker added");
+            notify("Locker created");
           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl">
-             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Add New Locker</h2>
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">New Locker Record</h2>
              <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
-                  <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all" placeholder="101" />
+                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
+                   <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all" placeholder="101" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Location</label>
-                  <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all">
+                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Wing/Floor</label>
+                   <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all">
                     {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                  </select>
+                   </select>
                 </div>
              </div>
              <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
              <div className="grid grid-cols-5 gap-2 mb-8">
                 {[1,2,3,4,5].map(n => (
                   <div key={n}>
-                    <div className="text-[8px] font-black text-slate-300 text-center mb-1 uppercase tracking-widest">Set {n}</div>
+                    <div className="text-[8px] font-black text-slate-300 text-center mb-1">SET {n}</div>
                     <input name={`combination${n}`} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px] text-center font-bold outline-none focus:border-blue-200" placeholder="0-0-0" />
                   </div>
                 ))}
              </div>
              <div className="flex gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create Locker</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create</button>
              </div>
           </form>
         </div>
