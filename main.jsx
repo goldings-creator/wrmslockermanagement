@@ -39,7 +39,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'wrms-locker-system';
 
-// --- Constants ---
 const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Science Wing"];
 
 // --- UI Components ---
@@ -60,7 +59,7 @@ const MaintenanceView = ({ logs, onUpdate }) => {
       <div className="bg-rose-50 border border-rose-100 p-10 rounded-[2.5rem] text-center">
         <Ban className="w-16 h-16 text-rose-500 mx-auto mb-4" />
         <h2 className="text-3xl font-black text-rose-900 tracking-tighter">{pending.length} Broken Lockers</h2>
-        <p className="text-rose-600 font-medium">Maintenance and repair tracking.</p>
+        <p className="text-rose-600 font-medium">Locker maintenance and repair requests.</p>
       </div>
       <div className="grid gap-4">
         {pending.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(log => (
@@ -77,7 +76,9 @@ const MaintenanceView = ({ logs, onUpdate }) => {
             </button>
           </div>
         ))}
-        {pending.length === 0 && <div className="p-20 text-center text-slate-300 font-bold italic">Clean slate! No broken lockers.</div>}
+        {pending.length === 0 && (
+          <div className="p-20 text-center text-slate-300 font-bold italic">No active maintenance issues.</div>
+        )}
       </div>
     </div>
   );
@@ -90,7 +91,7 @@ export default function App() {
   const [lockers, setLockers] = useState([]);
   const [students, setStudents] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
-  const [activeSet, setActiveSet] = useState(4); // Default to Set #4
+  const [activeSet, setActiveSet] = useState(4); 
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState("All Locations");
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -117,7 +118,7 @@ export default function App() {
       try {
         await signInAnonymously(auth);
       } catch (err) {
-        console.error("Firebase Login Error", err);
+        console.error("Auth error", err);
       }
     };
     initAuth();
@@ -136,19 +137,19 @@ export default function App() {
 
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) setActiveSet(docSnap.data().activeSet || 4);
-    }, (err) => console.error("Settings error:", err));
+    });
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => notify("Database Connection Issue", "error"));
+    }, (err) => notify("Database Error", "error"));
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => console.error("Students error:", err));
+    });
 
     const unsubLogs = onSnapshot(query(logsRef), (snapshot) => {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => console.error("Logs error:", err));
+    });
 
     return () => { unsubSettings(); unsubLockers(); unsubStudents(); unsubLogs(); };
   }, [user]);
@@ -162,7 +163,7 @@ export default function App() {
     try {
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
       await setDoc(settingsRef, { activeSet: newSet }, { merge: true });
-      notify(`Switching all to Set #${newSet}`);
+      notify(`Global Set switched to #${newSet}`);
     } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
 
@@ -194,6 +195,7 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
+              // Student format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -368,7 +370,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl">
-                  Select a student above to view their details.
+                  Select a student above to view their school details.
                 </div>
               )}
             </div>
