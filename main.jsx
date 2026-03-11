@@ -83,7 +83,6 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Rule 3: Auth before any queries
         await signInAnonymously(auth);
       } catch (err) {
         console.error("Auth error", err);
@@ -98,7 +97,6 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    // Rule 1: Strict paths
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const lockersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lockers');
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -162,7 +160,6 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
-              // Student format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -198,7 +195,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-10">
         <div className="text-center">
           <Loader2 className="animate-spin text-blue-600 mx-auto mb-4" size={48} />
-          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Locker System</h1>
+          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter uppercase">WRMS Locker System</h1>
           <p className="text-slate-400 font-medium animate-pulse uppercase text-xs tracking-widest">Connecting to Database...</p>
         </div>
       </div>
@@ -352,8 +349,8 @@ export default function App() {
                </div>
              ))}
              {maintenanceLogs.filter(l => l.status === 'pending').length === 0 && <div className="p-20 text-center text-slate-300 italic font-black uppercase tracking-tighter text-2xl opacity-50 flex flex-col items-center gap-4">
-                <CheckCircle size={48} className="text-emerald-300" />
-                Clean Slate — No broken lockers!
+                <CheckCircle size={48} className="text-emerald-200" />
+                No Broken Lockers!
              </div>}
           </div>
         )}
@@ -368,7 +365,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="flex gap-2 mb-4 justify-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
                  <button onClick={() => setImportType('lockers')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'lockers' ? 'bg-white shadow-sm text-blue-600 border border-slate-200/30' : 'text-slate-400'}`}>Lockers</button>
-                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600 border border-slate-200/30' : 'text-slate-400'}`}>Students</button>
+                 <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
               </div>
               <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white cursor-pointer shadow-sm hover:file:bg-blue-700 transition-all" />
               {isUploading && (
@@ -402,6 +399,73 @@ export default function App() {
                 <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
               </div>
            </form>
+        </div>
+      )}
+
+      {isUnusableModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+           <form onSubmit={async (e) => {
+             e.preventDefault();
+             const issue = new FormData(e.target).get('issue');
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'maintenance'), {
+               lockerId: activeLockerForStatus.id, lockerNumber: activeLockerForStatus.lockerNumber, issue, status: 'pending', createdAt: new Date().toISOString()
+             });
+             setIsUnusableModalOpen(false);
+             notify("Report submitted");
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100">
+              <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600">Mark Broken</h2>
+              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
+              <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
+              <div className="flex gap-3">
+                 <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
+              </div>
+           </form>
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in duration-200">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const f = new FormData(e.target);
+            const data = {
+              lockerNumber: f.get('lockerNumber'), studentName: f.get('studentName') || "", location: f.get('location') || "Main Hall",
+              combination1: f.get('combination1') || "0-0-0", combination2: f.get('combination2') || "0-0-0", 
+              combination3: f.get('combination3') || "0-0-0", combination4: f.get('combination4') || "0-0-0", 
+              combination5: f.get('combination5') || "0-0-0", lastModified: new Date().toISOString()
+            };
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lockers'), data);
+            setIsModalOpen(false);
+            notify("Locker created");
+          }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100">
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">New Locker Record</h2>
+             <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
+                   <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="101" />
+                </div>
+                <div>
+                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Wing/Floor</label>
+                   <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all shadow-inner">
+                    {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                   </select>
+                </div>
+             </div>
+             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
+             <div className="grid grid-cols-5 gap-2 mb-8">
+                {[1,2,3,4,5].map(n => (
+                  <div key={n}>
+                    <div className="text-[8px] font-black text-slate-300 text-center mb-1">SET {n}</div>
+                    <input name={`combination${n}`} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px] text-center font-bold outline-none focus:border-blue-200" placeholder="0-0-0" />
+                  </div>
+                ))}
+             </div>
+             <div className="flex gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create</button>
+             </div>
+          </form>
         </div>
       )}
 
