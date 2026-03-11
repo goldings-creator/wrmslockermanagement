@@ -44,7 +44,7 @@ const LOCATIONS = ["All Locations", "2nd Floor", "Lower Level", "Main Hall", "Sc
 // --- UI Components ---
 
 const StatCard = ({ label, value, color }) => (
-  <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden`}>
+  <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden transition-all hover:shadow-md`}>
     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</div>
     <div className="text-2xl font-black text-slate-900">{value}</div>
     <div className={`absolute bottom-0 left-0 w-full h-1 ${color === 'blue' ? 'bg-blue-500' : color === 'rose' ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>
@@ -118,7 +118,7 @@ export default function App() {
       try {
         await signInAnonymously(auth);
       } catch (err) {
-        notify("Login Error", "error");
+        console.error("Auth error", err);
       }
     };
     initAuth();
@@ -126,11 +126,10 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Data Listeners
+  // Data Listeners (Rule 1 & 3)
   useEffect(() => {
     if (!user) return;
     
-    // Using strict paths per Rule 1
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
     const lockersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lockers');
     const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -138,7 +137,7 @@ export default function App() {
 
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) setActiveSet(docSnap.data().activeSet || 4);
-    });
+    }, (err) => console.error(err));
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -146,11 +145,11 @@ export default function App() {
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => console.error(err));
 
     const unsubLogs = onSnapshot(query(logsRef), (snapshot) => {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => console.error(err));
 
     return () => { unsubSettings(); unsubLockers(); unsubStudents(); unsubLogs(); };
   }, [user]);
@@ -165,7 +164,7 @@ export default function App() {
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
       await setDoc(settingsRef, { activeSet: newSet }, { merge: true });
       notify(`Global Set switched to #${newSet}`);
-    } catch (e) { notify("Update failed", "error"); }
+    } catch (e) { notify("Update failed: Check permissions", "error"); }
   };
 
   const handleCSVImport = async (e) => {
@@ -221,12 +220,12 @@ export default function App() {
   const filteredLockers = useMemo(() => {
     return lockers
       .filter(l => {
-        const matchesSearch = l.lockerNumber?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                             l.studentName?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = (l.lockerNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             (l.studentName || "").toLowerCase().includes(searchTerm.toLowerCase());
         const matchesLocation = locationFilter === "All Locations" || l.location === locationFilter;
         return matchesSearch && matchesLocation;
       })
-      .sort((a, b) => a.lockerNumber.localeCompare(b.lockerNumber, undefined, {numeric: true}));
+      .sort((a, b) => (a.lockerNumber || "").localeCompare(b.lockerNumber || "", undefined, {numeric: true}));
   }, [lockers, searchTerm, locationFilter]);
 
   return (
@@ -242,13 +241,13 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden lg:flex gap-1 items-center mr-4">
-            <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest">SET:</span>
+            <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest uppercase">Combo Set:</span>
             {[1,2,3,4,5].map(n => (
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400 hover:bg-slate-300'}`}>{n}</button>
             ))}
           </div>
-          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border rounded-xl hover:bg-slate-50 transition-colors"><FileUp size={20}/></button>
-          <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100">+ NEW</button>
+          <button onClick={() => setImportModalOpen(true)} className="p-2 text-slate-400 border rounded-xl hover:bg-slate-50 transition-colors shadow-sm"><FileUp size={20}/></button>
+          <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95">+ NEW</button>
         </div>
       </header>
 
@@ -267,12 +266,12 @@ export default function App() {
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
                 <input type="text" placeholder="Search Number or Student..." className="w-full pl-14 pr-6 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm text-lg font-medium focus:ring-4 focus:ring-blue-50 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
-              <div className="relative min-w-[200px]">
+              <div className="relative min-w-[220px]">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <select 
                   value={locationFilter} 
                   onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full pl-11 pr-10 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm appearance-none font-bold text-slate-600 cursor-pointer"
+                  className="w-full pl-11 pr-10 py-5 bg-white border border-slate-200 rounded-[1.5rem] outline-none shadow-sm appearance-none font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition-colors"
                 >
                   {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                 </select>
@@ -289,13 +288,13 @@ export default function App() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-2xl font-black font-mono tracking-tighter">#{l.lockerNumber}</span>
-                          {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase">Broken</span>}
+                          {isUnusable && <span className="bg-rose-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest">Broken</span>}
                         </div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 mt-1 tracking-widest"><MapPin size={10}/> {l.location || "Hall"}</div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button onClick={() => { setActiveLockerForStatus(l); setIsUnusableModalOpen(true); }} className="p-2 text-slate-300 hover:text-rose-500"><Ban size={16}/></button>
-                         <button onClick={() => { if(window.confirm('Delete locker?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', l.id))}} className="p-2 text-slate-200 hover:text-red-500"><Trash2 size={16}/></button>
+                         <button onClick={() => { setActiveLockerForStatus(l); setIsUnusableModalOpen(true); }} className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Ban size={16}/></button>
+                         <button onClick={() => { if(window.confirm('Delete locker?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', l.id))}} className="p-2 text-slate-200 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                       </div>
                     </div>
                     
@@ -325,7 +324,7 @@ export default function App() {
         {view === 'students' && (
           <div className="max-w-3xl mx-auto animate-in fade-in duration-300">
             <div className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-200 mb-8">
-              <h2 className="text-3xl font-black mb-6 tracking-tighter flex items-center gap-3">
+              <h2 className="text-3xl font-black mb-6 tracking-tighter flex items-center gap-3 text-slate-800">
                 <GraduationCap className="text-blue-600" size={32} />
                 Student Lookup
               </h2>
@@ -335,10 +334,10 @@ export default function App() {
                 <select 
                   value={selectedStudentId} 
                   onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer"
+                  className="w-full pl-14 pr-10 py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none shadow-inner appearance-none font-black text-xl cursor-pointer hover:bg-slate-100 transition-colors"
                 >
                   <option value="">Choose a student...</option>
-                  {students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
+                  {[...students].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
@@ -370,8 +369,8 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="py-20 text-center text-slate-300 font-bold italic">
-                  Select a student above to view their details.
+                <div className="py-20 text-center text-slate-300 font-bold italic border-2 border-dashed border-slate-100 rounded-3xl">
+                  Select a student above to view their school details.
                 </div>
               )}
             </div>
@@ -440,8 +439,8 @@ export default function App() {
               <h2 className="text-3xl font-black mb-8 tracking-tighter">Assign #{activeLockerForAssign?.lockerNumber}</h2>
               <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Enter Full Name" />
               <div className="flex gap-3">
-                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform">Confirm</button>
+                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest transition-colors hover:text-slate-500">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
               </div>
            </form>
         </div>
@@ -462,8 +461,8 @@ export default function App() {
               <p className="text-slate-400 text-sm mb-6 text-center font-medium italic">Locker #{activeLockerForStatus?.lockerNumber}</p>
               <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
               <div className="flex gap-3">
-                 <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs">Cancel</button>
-                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100">Submit</button>
+                 <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
               </div>
            </form>
         </div>
@@ -484,24 +483,31 @@ export default function App() {
             setIsModalOpen(false);
             notify("Locker added");
           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl">
-             <h2 className="text-3xl font-black mb-8 tracking-tighter">Add New Locker</h2>
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Add New Locker</h2>
              <div className="grid grid-cols-2 gap-6 mb-6">
-                <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl" placeholder="Locker #" />
-                <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none">
-                  {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                </select>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
+                  <input name="lockerNumber" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xl outline-none focus:border-blue-300 transition-all" placeholder="101" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Location</label>
+                  <select name="location" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-600 appearance-none outline-none focus:border-blue-300 transition-all">
+                    {LOCATIONS.filter(l => l !== "All Locations").map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                  </select>
+                </div>
              </div>
+             <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Combinations (Sets 1-5)</label>
              <div className="grid grid-cols-5 gap-2 mb-8">
                 {[1,2,3,4,5].map(n => (
                   <div key={n}>
                     <div className="text-[8px] font-black text-slate-300 text-center mb-1 uppercase tracking-widest">Set {n}</div>
-                    <input name={`combination${n}`} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px] text-center font-bold" placeholder="0-0-0" />
+                    <input name={`combination${n}`} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px] text-center font-bold outline-none focus:border-blue-200" placeholder="0-0-0" />
                   </div>
                 ))}
              </div>
              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs tracking-widest">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform">Create Locker</button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create Locker</button>
              </div>
           </form>
         </div>
