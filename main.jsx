@@ -3,7 +3,7 @@ import {
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, IdCard
+  GraduationCap, School, Printer, IdCard, Contact
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -79,7 +79,6 @@ export default function App() {
   const [viewingCombination, setViewingCombination] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // Authentication Setup (Rule 3)
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -95,7 +94,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Data Listeners (Rule 1 & 3)
   useEffect(() => {
     if (!user) return;
     
@@ -106,7 +104,7 @@ export default function App() {
 
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) setActiveSet(docSnap.data().activeSet || 4);
-    }, (err) => console.error("Settings listener error", err));
+    });
 
     const unsubLockers = onSnapshot(query(lockersRef), (snapshot) => {
       setLockers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -114,11 +112,11 @@ export default function App() {
 
     const unsubStudents = onSnapshot(query(studentsRef), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => console.error("Students listener error", err));
+    });
 
     const unsubLogs = onSnapshot(query(logsRef), (snapshot) => {
       setMaintenanceLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => console.error("Maintenance listener error", err));
+    });
 
     return () => {
       unsubSettings();
@@ -160,7 +158,6 @@ export default function App() {
           const p = row.split(',').map(s => s?.trim());
           if (p[0]) {
             if (importType === 'lockers') {
-              // Locker Format: Number, Name, Set1, Set2, Set3, Set4, Set5, Location
               await addDoc(colRef, {
                 lockerNumber: p[0], studentName: p[1] || "", 
                 combination1: p[2] || "0-0-0", combination2: p[3] || "0-0-0", 
@@ -169,7 +166,6 @@ export default function App() {
                 lastModified: new Date().toISOString()
               });
             } else {
-              // Student Format: Name, Grade, Homeroom, ID
               await addDoc(colRef, {
                 name: p[0], grade: p[1] || "N/A", homeroom: p[2] || "N/A", studentId: p[3] || "N/A",
                 lastModified: new Date().toISOString()
@@ -410,7 +406,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Import Modal */}
+      {/* Modals */}
       {importModalOpen && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl border border-slate-100">
@@ -431,47 +427,6 @@ export default function App() {
             </div>
             <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors">Close</button>
           </div>
-        </div>
-      )}
-
-      {isAssignModalOpen && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-           <form onSubmit={async (e) => {
-             e.preventDefault();
-             const name = new FormData(e.target).get('studentName');
-             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', activeLockerForAssign.id), { studentName: name });
-             setIsAssignModalOpen(false);
-             notify(`Assigned to ${name}`);
-           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200 border border-slate-100">
-              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Assign #{activeLockerForAssign?.lockerNumber}</h2>
-              <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="Enter Full Name" />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
-              </div>
-           </form>
-        </div>
-      )}
-
-      {isUnusableModalOpen && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-           <form onSubmit={async (e) => {
-             e.preventDefault();
-             const issue = new FormData(e.target).get('issue');
-             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'maintenance'), {
-               lockerId: activeLockerForStatus.id, lockerNumber: activeLockerForStatus.lockerNumber, issue, status: 'pending', createdAt: new Date().toISOString()
-             });
-             setIsUnusableModalOpen(false);
-             notify("Report submitted");
-           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100">
-              <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600">Mark Broken</h2>
-              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
-              <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
-              <div className="flex gap-3">
-                 <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
-                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Submit</button>
-              </div>
-           </form>
         </div>
       )}
 
@@ -517,6 +472,47 @@ export default function App() {
                 <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-transform hover:bg-blue-700">Create</button>
              </div>
           </form>
+        </div>
+      )}
+
+      {isAssignModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+           <form onSubmit={async (e) => {
+             e.preventDefault();
+             const name = new FormData(e.target).get('studentName');
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lockers', activeLockerForAssign.id), { studentName: name });
+             setIsAssignModalOpen(false);
+             notify(`Assigned to ${name}`);
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200 border border-slate-100">
+              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800">Assign #{activeLockerForAssign?.lockerNumber}</h2>
+              <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="Enter Full Name" />
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
+              </div>
+           </form>
+        </div>
+      )}
+
+      {isUnusableModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+           <form onSubmit={async (e) => {
+             e.preventDefault();
+             const issue = new FormData(e.target).get('issue');
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'maintenance'), {
+               lockerId: activeLockerForStatus.id, lockerNumber: activeLockerForStatus.lockerNumber, issue, status: 'pending', createdAt: new Date().toISOString()
+             });
+             setIsUnusableModalOpen(false);
+             notify("Report submitted");
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100">
+              <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600">Mark Broken</h2>
+              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
+              <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
+              <div className="flex gap-3">
+                 <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
+                 <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform">Submit</button>
+              </div>
+           </form>
         </div>
       )}
 
