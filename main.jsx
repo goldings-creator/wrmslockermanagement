@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import { 
   Search, Lock, Unlock, User, UserPlus, UserMinus, Hash, Plus, Trash2, FileUp, 
   AlertCircle, CheckCircle2, Settings, Database, Wrench, Clock, 
   CheckCircle, AlertTriangle, History, X, MapPin, Layers, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, IdCard, Contact
+  GraduationCap, School, Printer, Contact, IdCard
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -52,7 +53,7 @@ const StatCard = ({ label, value, color }) => (
 
 // --- Main Application ---
 
-export default function App() {
+export function App() {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [lockers, setLockers] = useState([]);
@@ -211,14 +212,14 @@ export default function App() {
       
       {/* Hidden Layout for Printing */}
       <div className="hidden print:block p-10">
-        <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10">
+        <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-10 text-left">
           <div>
-            <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900 text-left">Assignment Report</h1>
+            <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900">Assignment Report</h1>
             <p className="text-slate-500 font-bold uppercase text-xs tracking-widest mt-2">WRMS Middle School • Printed: {new Date().toLocaleString()}</p>
           </div>
           <div className="text-right">
             <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Wing: {locationFilter}</p>
-            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Active Set: #{activeSet}</p>
+            <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Set: #{activeSet}</p>
           </div>
         </div>
         
@@ -244,14 +245,8 @@ export default function App() {
             ))}
           </tbody>
         </table>
-        
-        <div className="mt-12 pt-6 border-t border-slate-100 flex justify-between text-[10px] text-slate-400 font-black uppercase tracking-widest">
-          <span>End of Report</span>
-          <span>Record Count: {filteredLockers.length} Lockers</span>
-        </div>
       </div>
 
-      {/* Main Dashboard UI (Hides during print) */}
       <header className="bg-white border-b sticky top-0 z-40 p-4 flex justify-between items-center shadow-sm print:hidden">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-2 rounded-lg text-white font-black text-xs shadow-md">WRMS</div>
@@ -263,7 +258,7 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden lg:flex gap-1 items-center mr-4 border-r pr-4 border-slate-200">
-            <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest uppercase">Combo Set:</span>
+            <span className="text-[10px] font-black text-slate-400 mr-2 tracking-widest uppercase">Set:</span>
             {[1,2,3,4,5].map(n => (
               <button key={n} onClick={() => updateGlobalComboSet(n)} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${activeSet === n ? 'bg-blue-600 text-white shadow-md scale-110' : 'bg-slate-200 text-slate-400 hover:bg-slate-300'}`}>{n}</button>
             ))}
@@ -382,8 +377,8 @@ export default function App() {
              {maintenanceLogs.filter(l => l.status === 'pending').map(log => (
                <div key={log.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm">
                   <div>
-                    <h3 className="font-black text-lg text-slate-900 tracking-tighter uppercase text-rose-600">Locker #{log.lockerNumber}</h3>
-                    <p className="text-slate-500 font-medium italic">"{log.issue}"</p>
+                    <h3 className="font-black text-lg text-slate-900 tracking-tighter uppercase text-rose-600 text-left">Locker #{log.lockerNumber}</h3>
+                    <p className="text-slate-500 font-medium italic text-left">"{log.issue}"</p>
                   </div>
                   <button onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maintenance', log.id), { status: 'resolved' })} className="bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-emerald-700 transition-all active:scale-95">Mark Fixed</button>
                </div>
@@ -406,7 +401,7 @@ export default function App() {
                <button onClick={() => setImportType('students')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${importType === 'students' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}>Students</button>
             </div>
             <input type="file" accept=".csv" onChange={handleCSVImport} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white" />
-            <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors">Close</button>
+            <button onClick={() => setImportModalOpen(false)} className="mt-8 text-slate-300 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-500 transition-colors text-center block w-full">Close</button>
           </div>
         </div>
       )}
@@ -426,7 +421,7 @@ export default function App() {
             setIsModalOpen(false);
             notify("Locker created");
           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-xl shadow-2xl border border-slate-100">
-             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 text-left">New Locker Record</h2>
+             <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 text-left uppercase">New Record</h2>
              <div className="grid grid-cols-2 gap-6 mb-6">
                 <div className="text-left">
                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Locker #</label>
@@ -465,8 +460,8 @@ export default function App() {
              setIsAssignModalOpen(false);
              notify(`Assigned to ${name}`);
            }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl text-center animate-in zoom-in duration-200 border border-slate-100">
-              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 uppercase">Assign #{activeLockerForAssign?.lockerNumber}</h2>
-              <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="Enter Full Name" />
+              <h2 className="text-3xl font-black mb-8 tracking-tighter text-slate-800 uppercase text-center">Assign #{activeLockerForAssign?.lockerNumber}</h2>
+              <input name="studentName" required autoFocus className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-center mb-8 outline-none focus:border-blue-300 transition-all shadow-inner placeholder:text-slate-200" placeholder="Full Student Name" />
               <div className="flex gap-3">
                 <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-4 text-slate-300 font-black text-xs uppercase tracking-widest hover:text-slate-500 transition-colors">Cancel</button>
                 <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-transform hover:bg-blue-700">Confirm</button>
@@ -485,10 +480,10 @@ export default function App() {
              });
              setIsUnusableModalOpen(false);
              notify("Report submitted");
-           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100">
-              <h2 className="text-3xl font-black mb-4 tracking-tighter text-center text-rose-600 uppercase">Mark Broken</h2>
-              <p className="text-slate-400 text-sm mb-6 text-center font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
-              <textarea name="issue" required placeholder="What is wrong with this locker?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
+           }} className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200 border border-slate-100 text-center">
+              <h2 className="text-3xl font-black mb-4 tracking-tighter text-rose-600 uppercase">Mark Broken</h2>
+              <p className="text-slate-400 text-sm mb-6 font-medium italic tracking-widest uppercase">Locker #{activeLockerForStatus?.lockerNumber}</p>
+              <textarea name="issue" required placeholder="What is the issue?" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-medium min-h-[120px] mb-6 shadow-inner outline-none focus:border-rose-200 transition-all" />
               <div className="flex gap-3">
                  <button type="button" onClick={() => setIsUnusableModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs hover:text-slate-500 transition-colors">Cancel</button>
                  <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-transform hover:bg-rose-700">Submit</button>
@@ -504,4 +499,11 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// --- START COMMAND (The part that makes it display on Vercel) ---
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
 }
