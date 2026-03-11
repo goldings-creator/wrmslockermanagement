@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, User, UserPlus, UserMinus, Trash2, FileUp, 
   CheckCircle, MapPin, ChevronDown, Loader2, Ban,
-  GraduationCap, School, Printer, Contact, Upload
+  GraduationCap, School, Printer, BookOpen, Upload, UserSquare
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -355,7 +355,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl flex flex-col items-center">
-                   <Contact className="text-slate-200 mb-4" size={64} />
+                   <BookOpen className="text-slate-200 mb-4" size={64} />
                    <p className="text-slate-300 font-black uppercase text-[10px] tracking-widest">Pick a student above to see info</p>
                 </div>
               )}
